@@ -31,7 +31,7 @@ echo.
 echo [3/4] Installing dependencies...
 call "%FACELIB_DIR%\.venv\Scripts\activate.bat"
 python -m pip install --upgrade pip -q 2>nul
-pip install fastapi uvicorn insightface onnxruntime pillow numpy python-multipart pywebview -q
+pip install fastapi uvicorn insightface onnxruntime pillow "numpy<2.0" python-multipart pywebview -q
 
 echo.
 echo [4/4] Creating desktop shortcut...
