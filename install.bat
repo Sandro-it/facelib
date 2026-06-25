@@ -36,7 +36,7 @@ pip install fastapi uvicorn insightface onnxruntime pillow numpy python-multipar
 echo.
 echo [4/4] Creating desktop shortcut...
 set "DESKTOP=%USERPROFILE%\Desktop"
-set "SHORTCUT=%DESKTOP%\FaceLib.lnk"
+set "SHORTCUT=%DESKTOP%\FaceLib Desktop.lnk"
 set "TARGET=%FACELIB_DIR%\.venv\Scripts\pythonw.exe"
 set "SCRIPT=%FACELIB_DIR%\desktop_app.py"
 set "ICON_PATH=%FACELIB_DIR%\facelib.ico"
