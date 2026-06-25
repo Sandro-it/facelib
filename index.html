@@ -1607,6 +1607,9 @@ async function checkAndUpdate() {
 }
 
 initVersion();
+loadFolders();
+loadPersons(null);
+fetchStatus();
 setInterval(fetchStatus, 2000);
 setInterval(function(){
   var dot = document.getElementById('statusDot');
