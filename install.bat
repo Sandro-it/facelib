@@ -5,7 +5,6 @@ echo   FaceLib — Встановлення
 echo ========================================
 echo.
 
-:: Отримуємо поточну папку
 set "FACELIB_DIR=%~dp0"
 set "FACELIB_DIR=%FACELIB_DIR:~0,-1%"
 
@@ -25,14 +24,14 @@ python --version
 :: Створюємо віртуальне середовище
 echo.
 echo [2/4] Створення віртуального середовища...
-if not exist "%FACELIB_DIR%\venv" (
-    python -m venv "%FACELIB_DIR%\venv"
+if not exist "%FACELIB_DIR%\.venv" (
+    python -m venv "%FACELIB_DIR%\.venv"
 )
 
 :: Встановлюємо залежності
 echo.
 echo [3/4] Встановлення залежностей (може зайняти кілька хвилин)...
-call "%FACELIB_DIR%\venv\Scripts\activate.bat"
+call "%FACELIB_DIR%\.venv\Scripts\activate.bat"
 pip install --upgrade pip -q
 pip install fastapi uvicorn insightface onnxruntime pillow numpy python-multipart -q
 
@@ -44,7 +43,7 @@ set "SHORTCUT=%DESKTOP%\FaceLib.lnk"
 set "VBS_PATH=%FACELIB_DIR%\start.vbs"
 set "ICON_PATH=%FACELIB_DIR%\facelib.ico"
 
-powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = 'wscript.exe'; $s.Arguments = '\"%VBS_PATH%\"'; $s.IconLocation = '%ICON_PATH%'; $s.Description = 'FaceLib — розпізнавання облич'; $s.WorkingDirectory = '%FACELIB_DIR%'; $s.Save()"
+powershell -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = 'wscript.exe'; $s.Arguments = '\""%VBS_PATH%\"\"'; $s.IconLocation = '%ICON_PATH%'; $s.Description = 'FaceLib — розпізнавання облич'; $s.WorkingDirectory = '%FACELIB_DIR%'; $s.Save()"
 
 echo.
 echo ========================================
