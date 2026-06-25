@@ -1,66 +1,44 @@
-# FaceLib Installer
 $ErrorActionPreference = "Stop"
 $DIR = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-# Налаштування вікна
-$host.UI.RawUI.WindowTitle = "FaceLib — Встановлення"
+$host.UI.RawUI.WindowTitle = "FaceLib - Installation"
 $host.UI.RawUI.BackgroundColor = "DarkBlue"
 $host.UI.RawUI.ForegroundColor = "White"
 Clear-Host
 
-function Write-Header {
-    Write-Host ""
-    Write-Host "  ╔════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║        FaceLib — Встановлення          ║" -ForegroundColor Cyan
-    Write-Host "  ╚════════════════════════════════════════╝" -ForegroundColor Cyan
-    Write-Host ""
-}
+Write-Host ""
+Write-Host "  +========================================+" -ForegroundColor Cyan
+Write-Host "  |       FaceLib - Installation           |" -ForegroundColor Cyan
+Write-Host "  +========================================+" -ForegroundColor Cyan
+Write-Host ""
 
-function Write-Step {
-    param($num, $total, $text)
-    Write-Host "  [$num/$total] $text" -ForegroundColor Yellow
-}
-
-function Write-OK {
-    param($text)
-    Write-Host "  ✓ $text" -ForegroundColor Green
-}
-
-function Write-Fail {
-    param($text)
-    Write-Host "  ✗ $text" -ForegroundColor Red
-}
-
-Write-Header
-
-# Крок 1 — Python
-Write-Step 1 4 "Перевірка Python..."
+# Step 1 - Python
+Write-Host "  [1/4] Checking Python..." -ForegroundColor Yellow
 try {
     $pyver = python --version 2>&1
-    Write-OK "Python знайдено: $pyver"
+    Write-Host "  OK: $pyver" -ForegroundColor Green
 } catch {
-    Write-Fail "Python не знайдено!"
+    Write-Host "  ERROR: Python not found!" -ForegroundColor Red
+    Write-Host "  Download Python 3.10+ from https://python.org" -ForegroundColor White
+    Write-Host "  Check 'Add to PATH' during installation" -ForegroundColor White
     Write-Host ""
-    Write-Host "  Скачайте Python 3.10+ з https://python.org" -ForegroundColor White
-    Write-Host "  Під час встановлення поставте галочку 'Add to PATH'" -ForegroundColor White
-    Write-Host ""
-    Write-Host "  Натисніть Enter для виходу..." -ForegroundColor Gray
+    Write-Host "  Press Enter to exit..." -ForegroundColor Gray
     Read-Host
     exit 1
 }
 
-# Крок 2 — Віртуальне середовище
+# Step 2 - Virtual environment
 Write-Host ""
-Write-Step 2 4 "Створення віртуального середовища..."
+Write-Host "  [2/4] Creating virtual environment..." -ForegroundColor Yellow
 if (-not (Test-Path "$DIR\.venv")) {
     python -m venv "$DIR\.venv" | Out-Null
 }
-Write-OK "Готово"
+Write-Host "  OK: Done" -ForegroundColor Green
 
-# Крок 3 — Залежності
+# Step 3 - Dependencies
 Write-Host ""
-Write-Step 3 4 "Встановлення залежностей..."
-Write-Host "  (може зайняти 5-10 хвилин — завантажується InsightFace)" -ForegroundColor Gray
+Write-Host "  [3/4] Installing dependencies..." -ForegroundColor Yellow
+Write-Host "  (this may take 5-10 minutes)" -ForegroundColor Gray
 Write-Host ""
 
 $packages = @("fastapi", "uvicorn", "insightface", "onnxruntime", "pillow", "numpy", "python-multipart")
@@ -68,15 +46,15 @@ $i = 0
 foreach ($pkg in $packages) {
     $i++
     $pct = [int]($i / $packages.Count * 100)
-    Write-Progress -Activity "Встановлення пакетів" -Status "$pkg ($i/$($packages.Count))" -PercentComplete $pct
+    Write-Progress -Activity "Installing packages" -Status "$pkg ($i/$($packages.Count))" -PercentComplete $pct
     & "$DIR\.venv\Scripts\pip.exe" install $pkg -q 2>&1 | Out-Null
 }
-Write-Progress -Activity "Встановлення пакетів" -Completed
-Write-OK "Всі пакети встановлено"
+Write-Progress -Activity "Installing packages" -Completed
+Write-Host "  OK: All packages installed" -ForegroundColor Green
 
-# Крок 4 — Ярлик
+# Step 4 - Shortcut
 Write-Host ""
-Write-Step 4 4 "Створення ярлика на робочому столі..."
+Write-Host "  [4/4] Creating desktop shortcut..." -ForegroundColor Yellow
 $desktop = [Environment]::GetFolderPath("Desktop")
 $shortcut = "$desktop\FaceLib.lnk"
 $vbs = "$DIR\start.vbs"
@@ -87,17 +65,16 @@ $s = $ws.CreateShortcut($shortcut)
 $s.TargetPath = "wscript.exe"
 $s.Arguments = "`"$vbs`""
 $s.IconLocation = $icon
-$s.Description = "FaceLib — розпізнавання облич"
+$s.Description = "FaceLib"
 $s.WorkingDirectory = $DIR
 $s.Save()
-Write-OK "Ярлик FaceLib створено на робочому столі"
+Write-Host "  OK: Shortcut created on Desktop" -ForegroundColor Green
 
-# Готово
 Write-Host ""
-Write-Host "  ╔════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "  ║         Встановлення завершено!        ║" -ForegroundColor Green
-Write-Host "  ║   Двічі клікніть FaceLib на десктопі  ║" -ForegroundColor Green
-Write-Host "  ╚════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "  +========================================+" -ForegroundColor Green
+Write-Host "  |      Installation complete!            |" -ForegroundColor Green
+Write-Host "  |  Double-click FaceLib on your Desktop  |" -ForegroundColor Green
+Write-Host "  +========================================+" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Натисніть Enter для виходу..." -ForegroundColor Gray
+Write-Host "  Press Enter to exit..." -ForegroundColor Gray
 Read-Host
