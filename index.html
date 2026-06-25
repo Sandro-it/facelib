@@ -200,6 +200,10 @@
     <div class="status-bar">
       <span class="dot" id="statusDot"></span><span id="statusText">Завантаження...</span>
     </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span id="versionBadge" style="font-size:11px;color:var(--text-dim)"></span>
+      <button id="updateBtn" class="btn btn-secondary" style="display:none;font-size:11px;padding:3px 10px" onclick="checkAndUpdate()">🔄 Оновити</button>
+    </div>
   </header>
   <main>
     <aside class="sidebar">
@@ -1555,9 +1559,54 @@ async function openInExplorerPath(path) {
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
-loadFolders();
-loadPersons(null);
-fetchStatus();
+// Version and update check
+async function initVersion() {
+  try {
+    var r = await fetch('/api/version');
+    var d = await r.json();
+    var badge = document.getElementById('versionBadge');
+    if (badge) badge.textContent = 'v' + d.version;
+    // Перевіряємо оновлення у фоні
+    checkUpdateSilent();
+  } catch(e) {}
+}
+
+async function checkUpdateSilent() {
+  try {
+    var r = await fetch('/api/check-update');
+    var d = await r.json();
+    if (d.has_update) {
+      var btn = document.getElementById('updateBtn');
+      if (btn) {
+        btn.style.display = '';
+        btn.textContent = '🔄 Оновлення v' + d.latest;
+      }
+    }
+  } catch(e) {}
+}
+
+async function checkAndUpdate() {
+  var btn = document.getElementById('updateBtn');
+  if (!confirm('Встановити оновлення? Поточна версія буде збережена в папці backup/.')) return;
+  btn.disabled = true;
+  btn.textContent = '⏳ Оновлення...';
+  try {
+    var r = await fetch('/api/update', {method:'POST'});
+    var d = await r.json();
+    if (d.ok) {
+      alert('Оновлення встановлено! Перезапустіть FaceLib.');
+    } else {
+      alert('Помилка: ' + (d.error || 'невідома'));
+      btn.disabled = false;
+      btn.textContent = '🔄 Оновити';
+    }
+  } catch(e) {
+    alert('Помилка оновлення');
+    btn.disabled = false;
+  }
+}
+
+initVersion();
 setInterval(fetchStatus, 2000);
 setInterval(function(){
   var dot = document.getElementById('statusDot');
