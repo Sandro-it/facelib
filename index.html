@@ -1,0 +1,1568 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FaceLib</title>
+<style>
+  :root {
+    --bg:#0f0f11;--surface:#1a1a1f;--surface2:#242429;--border:#2e2e35;
+    --accent:#6c8fff;--accent-dim:#3d52a0;--text:#e8e8f0;--text-dim:#7878a0;
+    --green:#4ade80;--red:#f87171;--orange:#fb923c;--radius:10px;
+    --font:'Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);min-height:100vh}
+  .app{display:flex;flex-direction:column;height:100vh}
+  header{display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0}
+  header h1{font-size:18px;font-weight:700;color:var(--accent)}
+  .status-bar{font-size:12px;color:var(--text-dim);margin-left:auto;text-align:right;line-height:1.6;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--text-dim);margin-right:5px;vertical-align:middle}
+  .dot.active{background:var(--green);animation:pulse 1.2s infinite}
+  .dot.cluster{background:var(--orange);animation:pulse 0.8s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  main{display:flex;flex:1;overflow:hidden}
+
+  /* Sidebar */
+  .sidebar{width:270px;flex-shrink:0;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden}
+  .sidebar-top{flex-shrink:0;padding:12px;display:flex;flex-direction:column;gap:8px}
+  .btn{padding:8px 14px;border-radius:var(--radius);border:none;cursor:pointer;font-family:var(--font);font-size:13px;font-weight:600;transition:all .15s;white-space:nowrap}
+  .btn:hover{opacity:.82}
+  .btn:active{transform:scale(.97)}
+  .btn-primary{background:var(--accent);color:#fff}
+  .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border)}
+  .btn-danger{background:rgba(248,113,113,.12);color:var(--red);border:1px solid rgba(248,113,113,.25)}
+  .btn-row{display:flex;gap:8px}
+  .progress-wrap{display:none;padding:0 12px 8px}
+  .progress-wrap.visible{display:block}
+  .progress-bar-bg{background:var(--surface2);border-radius:4px;height:5px;overflow:hidden}
+  .progress-bar-fill{height:100%;background:var(--accent);border-radius:4px;transition:width .4s}
+  .progress-label{font-size:11px;color:var(--text-dim);margin-top:4px}
+
+  /* Folders */
+  .folders-panel{flex-shrink:0;border-top:1px solid var(--border);padding:10px 12px}
+  .section-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);margin-bottom:6px}
+  .folder-item{display:flex;align-items:center;gap:6px;padding:3px 0}
+  .folder-path{flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-dim)}
+  .folder-path.enabled{color:var(--text)}
+  .toggle-btn{width:28px;height:16px;border-radius:8px;border:none;cursor:pointer;position:relative;flex-shrink:0;transition:background .2s}
+  .toggle-btn.on{background:var(--accent)}
+  .toggle-btn.off{background:var(--border)}
+  .toggle-btn::after{content:'';position:absolute;top:2px;left:2px;width:12px;height:12px;border-radius:50%;background:#fff;transition:transform .2s}
+  .toggle-btn.on::after{transform:translateX(12px)}
+  .btn-xs{padding:2px 7px;font-size:10px;border-radius:5px;border:none;cursor:pointer;background:rgba(248,113,113,.12);color:var(--red);font-family:var(--font)}
+  .folder-add{display:flex;gap:6px;margin-top:6px}
+  .folder-input{flex:1;background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:4px 8px;font-size:11px;font-family:var(--font);outline:none}
+  .folder-input:focus{border-color:var(--accent)}
+  .folder-input::placeholder{color:var(--text-dim)}
+
+  /* Search */
+  .search-section{flex-shrink:0;padding:10px 12px;border-top:1px solid var(--border)}
+  .search-drop{border:1.5px dashed var(--border);border-radius:var(--radius);padding:10px;text-align:center;cursor:pointer;transition:border-color .2s}
+  .search-drop:hover,.search-drop.drag{border-color:var(--accent)}
+  .search-drop p{font-size:11px;color:var(--text-dim);pointer-events:none}
+  .search-drop input{display:none}
+
+  /* Persons */
+  .persons-section{flex:1;overflow:hidden;display:flex;flex-direction:column;border-top:1px solid var(--border)}
+  .persons-header{padding:8px 12px 4px}
+  .person-list{flex:1;overflow-y:auto;padding:0 8px 12px}
+  .person-list::-webkit-scrollbar{width:4px}
+  .person-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  .person-card{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:var(--radius);cursor:pointer;transition:background .15s;position:relative;overflow:hidden}
+  .person-card:hover{background:var(--surface2)}
+  .person-card.active{background:var(--accent-dim)}
+  .person-avatar{width:42px;height:42px;border-radius:50%;object-fit:cover;background:var(--surface2);flex-shrink:0;border:2px solid var(--border)}
+  .person-avatar-ph{width:42px;height:42px;border-radius:50%;background:var(--surface2);flex-shrink:0;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;color:var(--text-dim)}
+  .person-info{flex:1;min-width:0}
+  .person-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .person-name.unnamed{color:var(--text-dim);font-style:italic}
+  .person-sub{font-size:11px;color:var(--text-dim);margin-top:1px}
+  .person-match{font-size:11px;color:var(--green);margin-top:1px}
+  .person-card-actions{display:none;position:absolute;right:0;top:0;bottom:0;align-items:center;gap:2px;padding:0 6px;background:linear-gradient(to right, transparent, var(--surface1) 20%)}
+  .person-card:hover .person-card-actions{display:flex}
+  .card-action-btn{background:var(--surface);border:1px solid var(--border);color:var(--text-dim);border-radius:6px;padding:3px 7px;font-size:11px;cursor:pointer;font-family:var(--font);transition:all .15s}
+  .card-action-btn:hover{background:var(--accent-dim);color:#fff;border-color:var(--accent)}
+  .card-action-btn.red:hover{background:rgba(248,113,113,.2);color:var(--red);border-color:var(--red)}
+  .active-sort{background:var(--accent)!important;color:#fff!important;border-color:var(--accent)!important}
+  .fav-btn{background:none;border:none;cursor:pointer;font-size:13px;padding:2px 3px;opacity:0.25;transition:opacity .15s, transform .15s;line-height:1;flex-shrink:0}
+  .fav-btn:hover{opacity:1;transform:scale(1.2)}
+  .fav-btn.active{opacity:0.85}
+  .favorites-divider{padding:4px 8px 2px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-dim);margin-top:4px}
+  .person-card.dragging{opacity:.4}
+  .person-card.drag-over{border-top:2px solid var(--accent)}
+
+  /* Content */
+  .content{flex:1;display:flex;flex-direction:column;overflow:hidden}
+  .content-header{padding:12px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-shrink:0;flex-wrap:wrap}
+  .content-header h2{font-size:15px;font-weight:700;flex:1;min-width:120px}
+  .name-wrap{position:relative;display:flex;align-items:center}
+  .name-input{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 10px;font-size:13px;font-family:var(--font);width:170px;outline:none;transition:border-color .2s}
+  .name-input:focus{border-color:var(--accent)}
+  .name-input::placeholder{color:var(--text-dim)}
+  .save-badge{position:absolute;right:-60px;background:var(--green);color:#000;font-size:10px;font-weight:700;border-radius:5px;padding:2px 7px;opacity:0;transition:opacity .3s;pointer-events:none;white-space:nowrap}
+  .save-badge.show{opacity:1}
+  .header-actions{display:flex;gap:6px;align-items:center}
+  .close-gallery-btn{background:none;border:1px solid var(--border);color:var(--text-dim);border-radius:8px;padding:5px 10px;font-size:12px;cursor:pointer;font-family:var(--font);transition:all .15s}
+  .close-gallery-btn:hover{border-color:var(--red);color:var(--red)}
+
+  /* Photo grid */
+  .photo-grid{flex:1;overflow-y:auto;padding:16px 20px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;align-content:start;grid-auto-rows:150px}
+  .photo-grid::-webkit-scrollbar{width:6px}
+  .photo-grid::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  .photo-card{position:relative;border-radius:var(--radius);overflow:hidden;background:var(--surface2);cursor:pointer;width:100%;height:100%;transition:transform .15s,box-shadow .15s}
+  .photo-card:hover{transform:scale(1.03);box-shadow:0 4px 20px rgba(0,0,0,.5)}
+  .photo-card img{width:100%;height:100%;object-fit:cover;display:block}
+  .photo-overlay{position:absolute;inset:0;background:linear-gradient(to top,rgba(0,0,0,.8) 0%,transparent 50%);opacity:0;transition:opacity .15s;display:flex;align-items:flex-end;justify-content:space-between;padding:7px}
+  .photo-card:hover .photo-overlay{opacity:1}
+  .photo-select-cb{position:absolute;top:6px;left:6px;width:18px;height:18px;cursor:pointer;z-index:10;accent-color:var(--accent);display:none}
+  .photo-card:hover .photo-select-cb, .photo-card.selected .photo-select-cb{display:block}
+  .photo-card.selected{outline:2px solid var(--accent);outline-offset:-2px}
+  .photo-card.selected img{opacity:0.85}
+  .selection-bar{display:none;position:fixed;bottom:0;left:210px;right:0;z-index:200;background:var(--surface2);border-top:2px solid var(--accent);padding:10px 20px;align-items:center;gap:10px}
+  .selection-bar.visible{display:flex}
+  .overlay-btn{font-size:10px;color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:3px 7px;cursor:pointer;font-family:var(--font);transition:background .15s}
+  .overlay-btn:hover{background:rgba(255,255,255,.32)}
+  .overlay-btn.red{background:rgba(248,113,113,.25);border-color:rgba(248,113,113,.4)}
+  .overlay-btn.red:hover{background:rgba(248,113,113,.45)}
+  .set-cover-btn{position:absolute;top:6px;right:6px;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);border-radius:5px;padding:2px 6px;font-size:10px;color:#fff;cursor:pointer;opacity:0;transition:opacity .15s;font-family:var(--font)}
+  .photo-card:hover .set-cover-btn{opacity:1}
+
+  /* Timeline */
+  .gallery-wrap{flex:1;display:flex;overflow:hidden}
+  .timeline{width:48px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px;overflow:hidden}
+  .timeline-year{font-size:9px;color:var(--text-dim);cursor:pointer;padding:3px 4px;border-radius:4px;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);transition:all .15s;text-align:center;line-height:1}
+  .timeline-year:hover,.timeline-year.active{color:var(--accent);background:var(--surface2)}
+
+  /* Empty/loading */
+  .empty-state{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--text-dim);gap:12px;text-align:center;padding:40px}
+  .empty-icon{font-size:48px;opacity:.35}
+  .spinner{width:36px;height:36px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  /* Lightbox / Slider */
+  .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:100;flex-direction:column}
+  .lightbox.open{display:flex}
+  .lb-top{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;flex-shrink:0}
+  .lb-counter{font-size:13px;color:var(--text-dim)}
+  .lb-close{font-size:22px;color:#fff;cursor:pointer;background:none;border:none;opacity:.6;font-family:var(--font);padding:4px 8px}
+  .lb-close:hover{opacity:1}
+  .lb-main{flex:1;display:flex;align-items:center;justify-content:center;position:relative;overflow:hidden}
+  .lb-main img{max-width:calc(100vw - 60px);max-height:calc(100vh - 90px);object-fit:contain;border-radius:6px;user-select:none;transition:transform .1s;cursor:zoom-in}
+  .lb-main img.zoomed{cursor:grab;transition:none}
+  .lb-main img.dragging{cursor:grabbing;transition:none}
+  .lb-arrow{position:absolute;top:50%;transform:translateY(-50%);background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:50%;width:44px;height:44px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;transition:background .15s;user-select:none}
+  .lb-arrow:hover{background:rgba(255,255,255,.25)}
+  .lb-arrow.left{left:16px}
+  .lb-arrow.right{right:16px}
+  .lb-bottom{padding:12px 18px;display:flex;align-items:center;justify-content:center;gap:10px;flex-shrink:0}
+
+  /* Modals */
+  .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:150;align-items:center;justify-content:center}
+  .modal-bg.open{display:flex}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:380px;max-height:75vh;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal h3{font-size:15px;font-weight:700}
+  .modal-search{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:13px;font-family:var(--font);outline:none;width:100%}
+  .modal-search:focus{border-color:var(--accent)}
+  .modal-list{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:3px;min-height:100px}
+  .modal-list::-webkit-scrollbar{width:4px}
+  .modal-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+  .modal-item{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer;transition:background .15s}
+  .modal-item:hover{background:var(--surface2)}
+  .modal-item img,.modal-item-ph{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
+  .modal-item-ph{background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-dim)}
+  .modal-item-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .modal-item-count{font-size:11px;color:var(--text-dim)}
+  .modal-footer{display:flex;gap:8px;justify-content:flex-end}
+
+  /* Confirm dialog */
+  .confirm-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:360px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .confirm-box h3{font-size:15px;font-weight:700}
+  .confirm-box p{font-size:13px;color:var(--text-dim);line-height:1.6}
+  .confirm-box .warning{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red)}
+  .confirm-footer{display:flex;gap:8px;justify-content:flex-end}
+
+  /* Toast */
+  .toast{position:fixed;bottom:18px;right:18px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);padding:10px 16px;font-size:13px;z-index:300;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;max-width:300px;box-shadow:0 4px 20px rgba(0,0,0,.3)}
+  .toast.show{opacity:1;transform:translateY(0)}
+  .toast.success{border-color:rgba(74,222,128,.3);background:rgba(74,222,128,.08)}
+  .toast.error{border-color:rgba(248,113,113,.3);background:rgba(248,113,113,.08)}
+  .toast-near{position:fixed;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;z-index:400;opacity:0;transform:translateY(-4px);transition:all .2s;pointer-events:none;white-space:nowrap;box-shadow:0 4px 16px rgba(0,0,0,.4)}
+  .toast-near.show{opacity:1;transform:translateY(0)}
+  .toast-near.success{border-color:rgba(74,222,128,.4);background:rgba(74,222,128,.12);color:var(--green)}
+  .toast-near.error{border-color:rgba(248,113,113,.4);background:rgba(248,113,113,.12);color:var(--red)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>📷 FaceLib</h1>
+    <div class="status-bar">
+      <span class="dot" id="statusDot"></span><span id="statusText">Завантаження...</span>
+    </div>
+  </header>
+  <main>
+    <aside class="sidebar">
+      <div class="sidebar-top">
+        <div class="btn-row">
+          <button class="btn btn-primary" style="flex:1" id="btnStart" onclick="startIndexer()">▶ Індексувати</button>
+          <button class="btn btn-secondary" id="btnStop" style="display:none" onclick="stopIndexer()">⏹ Стоп</button>
+        </div>
+        <button class="btn btn-secondary" onclick="doCluster()">🔗 Групувати обличчя</button>
+      </div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="progress-label" id="progressLabel"></div>
+      </div>
+      <div class="folders-panel">
+        <div class="section-label">Папки для сканування</div>
+        <div id="folderList"></div>
+        <div class="folder-add">
+          <input class="folder-input" id="folderInput" placeholder="або введи шлях вручну..." onkeydown="if(event.key==='Enter')addFolder()">
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:13px" onclick="browseFolder()" title="Обрати папку">📁</button>
+          <button class="btn btn-secondary" style="padding:4px 10px;font-size:13px" onclick="addFolder()" title="Додати">+</button>
+        </div>
+      </div>
+      <div class="search-section">
+        <div class="section-label">Пошук по фото</div>
+        <div class="search-drop" id="searchDrop" onclick="document.getElementById('searchInput').click()">
+          <p id="searchDropText">⬆ Кинь або обери фото людини</p>
+          <span id="searchDropResult" style="display:none;font-size:12px"></span>
+          <input type="file" id="searchInput" accept="image/*" onchange="searchByFile(this.files[0])">
+        </div>
+      </div>
+      <div class="persons-section">
+        <div class="persons-header">
+          <div class="section-label" style="margin-bottom:0">Люди (<span id="personCount">0</span>)</div>
+          <div style="display:flex;gap:4px">
+            <button id="sortByCount" class="btn btn-secondary active-sort" onclick="setPersonsSort('count')" title="За кількістю фото" style="padding:2px 8px;font-size:11px">📷</button>
+            <button id="sortByName" class="btn btn-secondary" onclick="setPersonsSort('name')" title="За прізвищем" style="padding:2px 8px;font-size:11px">А-Я</button>
+          </div>
+        </div>
+        <div style="padding:0 8px 6px;position:relative">
+          <input class="folder-input" id="personSearch" placeholder="🔍 Пошук за ім'ям..." style="width:100%;font-size:12px;padding-right:26px" oninput="onPersonSearch(this.value)">
+          <button onclick="clearPersonSearch()" id="personSearchClear" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px" title="Очистити">✕</button>
+        </div>
+        <div class="person-list" id="personList" onscroll="onPersonListScroll(this)"></div>
+      </div>
+    </aside>
+
+    <section class="content" id="contentArea">
+      <div class="empty-state">
+        <div class="empty-icon">👤</div>
+        <p>Обери людину зліва<br>або запусти індексацію архіву</p>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Lightbox slider -->
+<div class="lightbox" id="lightbox">
+  <div class="lb-top">
+    <div class="lb-counter" id="lbCounter"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="lbOpenFolder()">📂 Відкрити в папці</button>
+      <button class="btn btn-secondary" id="lbPlayBtn" style="font-size:12px;padding:5px 14px" onclick="lbTogglePlay()">▶</button>
+      <button class="lb-close" onclick="closeLightbox()">✕</button>
+    </div>
+  </div>
+  <div class="lb-main" onclick="if(event.target===this)closeLightbox()">
+    <div class="lb-arrow left" onclick="event.stopPropagation();lbPrev()">‹</div>
+    <img id="lbImg" src="" alt="" onclick="event.stopPropagation()">
+    <div class="lb-arrow right" onclick="event.stopPropagation();lbNext()">›</div>
+  </div>
+</div>
+
+<!-- Merge modal -->
+<div class="modal-bg" id="mergeModal" onclick="if(event.target===this)closeMergeModal()">
+  <div class="modal">
+    <h3>🔗 Злити з іншою людиною</h3>
+    <input class="modal-search" id="mergeSearch" placeholder="Пошук за ім'ям..." oninput="filterMergeList(this.value)">
+    <div class="modal-list" id="mergeList"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeMergeModal()">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="modal-bg" id="confirmModal">
+  <div class="confirm-box">
+    <h3 id="confirmTitle"></h3>
+    <p id="confirmText"></p>
+    <div class="warning" id="confirmWarning"></div>
+    <div class="confirm-footer">
+      <button class="btn btn-secondary" onclick="confirmReject()">Скасувати</button>
+      <button class="btn btn-danger" id="confirmOkBtn" onclick="confirmAccept()">Підтвердити</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<div class="toast-near" id="toastNear"></div>
+
+<script>
+var currentPersonId = null;
+var currentPhotos = [];
+var lbIndex = 0;
+var allPersonsCache = {}; // id -> person
+var mergeSourceId = null;
+var confirmCallback = null;
+var currentAbort = null;
+var loadYear = null;
+var loadYearTop = null;
+var selectedPhotoIds = new Set();
+var lastSelectedIdx = -1;
+
+function togglePhotoSelect(photoId, card) {
+  if (selectedPhotoIds.has(photoId)) {
+    selectedPhotoIds.delete(photoId);
+    card.classList.remove('selected');
+    var cb = card.querySelector('.photo-select-cb');
+    if (cb) cb.checked = false;
+  } else {
+    selectedPhotoIds.add(photoId);
+    card.classList.add('selected');
+    var cb = card.querySelector('.photo-select-cb');
+    if (cb) cb.checked = true;
+    // Запам'ятовуємо індекс для shift-click
+    lastSelectedIdx = currentPhotos.findIndex(function(p){ return p.id === photoId; });
+  }
+  updateSelectionBar();
+}
+
+function selectRange(toPhotoId, toCard) {
+  var grid = document.getElementById('photoGrid');
+  var cards = Array.from(grid.querySelectorAll('.photo-card'));
+  // Знаходимо індекси в DOM
+  var fromCard = grid.querySelector('.photo-card[data-photo-id="' + (currentPhotos[lastSelectedIdx] ? currentPhotos[lastSelectedIdx].id : -1) + '"]');
+  var fromDomIdx = fromCard ? cards.indexOf(fromCard) : -1;
+  var toDomIdx = cards.indexOf(toCard);
+  if (fromDomIdx < 0 || toDomIdx < 0) { togglePhotoSelect(toPhotoId, toCard); return; }
+  var from = Math.min(fromDomIdx, toDomIdx);
+  var to = Math.max(fromDomIdx, toDomIdx);
+  for (var i = from; i <= to; i++) {
+    var card = cards[i];
+    var phId = parseInt(card.dataset.photoId);
+    if (!phId) continue;
+    if (!selectedPhotoIds.has(phId)) {
+      selectedPhotoIds.add(phId);
+      card.classList.add('selected');
+      var cb = card.querySelector('.photo-select-cb');
+      if (cb) cb.checked = true;
+    }
+  }
+  lastSelectedIdx = currentPhotos.findIndex(function(p){ return p.id === toPhotoId; });
+  updateSelectionBar();
+}
+
+function updateSelectionBar() {
+  var bar = document.getElementById('selectionBar');
+  var cnt = document.getElementById('selCount');
+  if (!bar) return;
+  if (selectedPhotoIds.size > 0) {
+    bar.classList.add('visible');
+    cnt.textContent = 'Вибрано: ' + selectedPhotoIds.size + ' фото';
+    document.getElementById('photoGrid').style.userSelect = 'none';
+  } else {
+    bar.classList.remove('visible');
+    document.getElementById('photoGrid').style.userSelect = '';
+  }
+}
+
+function clearSelection() {
+  selectedPhotoIds.clear();
+  lastSelectedIdx = -1;
+  document.querySelectorAll('.photo-card.selected').forEach(function(c){
+    c.classList.remove('selected');
+    var cb = c.querySelector('.photo-select-cb');
+    if (cb) cb.checked = false;
+  });
+  updateSelectionBar();
+}
+
+async function removeSelectedPhotos() {
+  if (!selectedPhotoIds.size) return;
+  var ids = Array.from(selectedPhotoIds);
+  for (var i = 0; i < ids.length; i++) {
+    await fetch('/api/photos/' + ids[i] + '/unlink', {method:'POST'});
+    var card = document.querySelector('.photo-card[data-photo-id="' + ids[i] + '"]');
+    if (card) card.remove();
+    var idx = currentPhotos.findIndex(function(p){ return p.id === ids[i]; });
+    if (idx >= 0) currentPhotos.splice(idx, 1);
+  }
+  clearSelection();
+  toastHeader('✓ Прибрано ' + ids.length + ' фото', 'success');
+  loadPersons(null);
+}
+
+async function moveSelectedToNew() {
+  if (!selectedPhotoIds.size) return;
+  var ids = Array.from(selectedPhotoIds);
+  var r = await fetch('/api/persons/split', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({photo_ids: ids, target_person_id: null})
+  });
+  var d = await r.json();
+  if (d.ok) {
+    clearSelection();
+    ids.forEach(function(photoId) {
+      var card = document.querySelector('.photo-card[data-photo-id="' + photoId + '"]');
+      if (card) card.remove();
+      var idx = currentPhotos.findIndex(function(p){ return p.id === photoId; });
+      if (idx >= 0) currentPhotos.splice(idx, 1);
+    });
+    // Оновлюємо список і одразу відкриваємо нову людину
+    await loadPersons(null);
+    var newPerson = await fetch('/api/persons/' + d.target_person_id).then(function(r){ return r.json(); });
+    if (newPerson && newPerson.id) openPerson(newPerson);
+  } else {
+    toastHeader('Помилка переміщення', 'error');
+  }
+}
+
+function openMoveToExistingModal() {
+  if (!selectedPhotoIds.size) return;
+  // Використовуємо merge modal але для переміщення
+  document.getElementById('mergeSearch').value = '';
+  var modal = document.getElementById('mergeModal');
+  modal.classList.add('open');
+  modal.dataset.mode = 'move';
+  var title = modal.querySelector('h3');
+  if (title) title.textContent = 'Перемістити фото до...';
+  var r2 = fetch('/api/persons').then(function(r){ return r.json(); }).then(function(persons){
+    allPersonsCache = {};
+    persons.forEach(function(p){ allPersonsCache[p.id] = p; });
+    renderMergeList(persons.filter(function(p){ return p.id !== currentPersonId; }));
+  });
+}
+var loadedYears = {};    // yr -> true коли завантажено
+var bottomYearIdx = 0;  // індекс наступного року для завантаження вниз (scroll)
+var topYearIdx = -1;    // індекс наступного року для завантаження вгору (кнопка)
+
+// ---------------------------------------------------------------------------
+// Toast
+// ---------------------------------------------------------------------------
+function toast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast ' + (type || '');
+  t.classList.add('show');
+  setTimeout(function() { t.classList.remove('show'); }, 3000);
+}
+
+var _toastNearTimer = null;
+function toastNear(anchorEl, msg, type) {
+  var t = document.getElementById('toastNear');
+  if (!t || !anchorEl) { toast(msg, type); return; }
+  var rect = anchorEl.getBoundingClientRect();
+  t.textContent = msg;
+  t.className = 'toast-near ' + (type || '');
+  // Позиціонуємо над кнопкою
+  t.style.left = rect.left + 'px';
+  t.style.top = (rect.top - 36) + 'px';
+  t.classList.add('show');
+  if (_toastNearTimer) clearTimeout(_toastNearTimer);
+  _toastNearTimer = setTimeout(function() { t.classList.remove('show'); }, 2500);
+}
+
+// ---------------------------------------------------------------------------
+// Confirm dialog
+// ---------------------------------------------------------------------------
+function showConfirm(title, text, warning, okLabel, cb) {
+  document.getElementById('confirmTitle').textContent = title;
+  document.getElementById('confirmText').textContent = text;
+  document.getElementById('confirmWarning').textContent = warning || '';
+  document.getElementById('confirmWarning').style.display = warning ? '' : 'none';
+  document.getElementById('confirmOkBtn').textContent = okLabel || 'Підтвердити';
+  confirmCallback = cb;
+  document.getElementById('confirmModal').classList.add('open');
+}
+function confirmAccept() {
+  document.getElementById('confirmModal').classList.remove('open');
+  if (confirmCallback) confirmCallback();
+  confirmCallback = null;
+}
+function confirmReject() {
+  document.getElementById('confirmModal').classList.remove('open');
+  confirmCallback = null;
+}
+
+// ---------------------------------------------------------------------------
+// Status
+// ---------------------------------------------------------------------------
+async function fetchStatus() {
+  try {
+    var r = await fetch('/api/status');
+    var s = await r.json();
+    var dot = document.getElementById('statusDot');
+    var txt = document.getElementById('statusText');
+    var wrap = document.getElementById('progressWrap');
+    var fill = document.getElementById('progressFill');
+    var label = document.getElementById('progressLabel');
+    var btnStart = document.getElementById('btnStart');
+    var btnStop = document.getElementById('btnStop');
+    if (s.running) {
+      if (s.clustering) {
+        dot.className = 'dot cluster';
+        txt.textContent = 'Групування...';
+      } else {
+        dot.className = 'dot active';
+        var pct = s.total > 0 ? Math.round(s.processed / s.total * 100) : 0;
+        txt.textContent = 'Індексація ' + pct + '% | ' + (s.current_file || '');
+        fill.style.width = pct + '%';
+        label.textContent = s.processed.toLocaleString() + ' / ' + s.total.toLocaleString() + ' • помилок: ' + s.errors;
+      }
+      wrap.classList.add('visible');
+      btnStart.style.display = 'none';
+      btnStop.style.display = '';
+    } else {
+      dot.className = 'dot';
+      txt.textContent = s.db_photos.toLocaleString() + ' фото · ' + s.db_faces.toLocaleString() + ' облич · ' + s.db_persons.toLocaleString() + ' людей';
+      wrap.classList.remove('visible');
+      btnStart.style.display = '';
+      btnStop.style.display = 'none';
+    }
+  } catch(e) {}
+}
+
+async function startIndexer() {
+  var r = await fetch('/api/indexer/start', {method:'POST'});
+  var d = await r.json();
+  if (d.ok) toast('Індексація запущена', 'success');
+  else toast(d.msg, 'error');
+}
+async function stopIndexer() {
+  await fetch('/api/indexer/stop', {method:'POST'});
+  toast('Зупиняємо...', '');
+}
+async function doCluster() {
+  toast('Групуємо обличчя...', '');
+  var r = await fetch('/api/cluster', {method:'POST'});
+  var d = await r.json();
+  if (d.ok) { toast('Готово! Нових груп: ' + d.new_persons, 'success'); loadPersons(null); }
+  else toast(d.msg, 'error');
+}
+
+// ---------------------------------------------------------------------------
+// Folders
+// ---------------------------------------------------------------------------
+async function loadFolders() {
+  var r = await fetch('/api/folders');
+  var folders = await r.json();
+  var list = document.getElementById('folderList');
+  list.innerHTML = '';
+  folders.forEach(function(f) {
+    var row = document.createElement('div');
+    row.className = 'folder-item';
+    var toggle = document.createElement('button');
+    toggle.className = 'toggle-btn ' + (f.enabled ? 'on' : 'off');
+    toggle.onclick = function() { toggleFolder(f.id, !f.enabled); };
+    var path = document.createElement('span');
+    path.className = 'folder-path' + (f.enabled ? ' enabled' : '');
+    path.textContent = f.path; path.title = f.path;
+    var del = document.createElement('button');
+    del.className = 'btn-xs'; del.textContent = '✕';
+    del.onclick = function() { deleteFolder(f.id); };
+    row.appendChild(toggle); row.appendChild(path); row.appendChild(del);
+    list.appendChild(row);
+  });
+}
+async function browseFolder() {
+  var r = await fetch('/api/browse-folder');
+  var d = await r.json();
+  if (d.ok && d.path) { document.getElementById('folderInput').value = d.path; await addFolder(); }
+}
+async function addFolder() {
+  var input = document.getElementById('folderInput');
+  var path = input.value.trim();
+  if (!path) return;
+  var r = await fetch('/api/folders', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({path:path})});
+  var d = await r.json();
+  if (d.ok) { input.value = ''; loadFolders(); toast('Папку додано', 'success'); }
+  else toast(d.msg, 'error');
+}
+async function deleteFolder(id) { await fetch('/api/folders/'+id, {method:'DELETE'}); loadFolders(); }
+async function toggleFolder(id, enabled) {
+  await fetch('/api/folders/'+id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({enabled:enabled})});
+  loadFolders();
+}
+
+// ---------------------------------------------------------------------------
+// Persons
+// ---------------------------------------------------------------------------
+var personsOffset = 0;
+var personsBatchSize = 80;
+var personsAllLoaded = false;
+var personsSearchQuery = '';
+var personsLoading = false;
+
+async function loadPersons(highlightIds) {
+  personsOffset = 0;
+  personsAllLoaded = false;
+  personsLoading = false;
+  var list = document.getElementById('personList');
+  list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)"><div class="spinner" style="margin:0 auto"></div></div>';
+  // Get count
+  var countR = await fetch('/api/persons/count?search=' + encodeURIComponent(personsSearchQuery));
+  var countD = await countR.json();
+  document.getElementById('personCount').textContent = countD.count.toLocaleString();
+  list.innerHTML = '';
+  await loadMorePersons(highlightIds);
+}
+
+async function loadMorePersons(highlightIds) {
+  if (personsLoading || personsAllLoaded) return;
+  personsLoading = true;
+  var url = '/api/persons?limit=' + personsBatchSize + '&offset=' + personsOffset + '&sort=' + personsSort;
+  if (personsSearchQuery) url += '&search=' + encodeURIComponent(personsSearchQuery);
+  var r = await fetch(url);
+  var persons = await r.json();
+  if (persons.length < personsBatchSize) personsAllLoaded = true;
+  personsOffset += persons.length;
+  if (persons.length === 0 && personsOffset === 0) {
+    document.getElementById('personList').innerHTML = '<div style="padding:16px;text-align:center;color:var(--text-dim);font-size:12px">Нікого не знайдено</div>';
+    personsLoading = false;
+    return;
+  }
+  persons.forEach(function(p) { allPersonsCache[p.id] = p; });
+  var list = document.getElementById('personList');
+
+  // Додаємо роздільник якщо перша не-обрана людина в цьому батчі
+  var lastCard = list.lastElementChild;
+  var lastIsFav = lastCard && lastCard.dataset.fav === '1';
+  persons.forEach(function(p) {
+    // Роздільник між обраними і рештою
+    if (lastIsFav && !p.is_favorite) {
+      var div = document.createElement('div');
+      div.className = 'favorites-divider';
+      div.id = 'favDivider';
+      div.textContent = '— решта —';
+      list.appendChild(div);
+    }
+    lastIsFav = p.is_favorite;
+
+    var card = document.createElement('div');
+    card.className = 'person-card' + (p.id === currentPersonId ? ' active' : '');
+    card.dataset.id = p.id;
+    card.dataset.fav = p.is_favorite ? '1' : '0';
+
+    // Drag-to-reorder тільки для обраних
+    if (p.is_favorite) {
+      card.draggable = true;
+      card.addEventListener('dragstart', function(e) {
+        e.dataTransfer.setData('text/plain', p.id);
+        setTimeout(function(){ card.classList.add('dragging'); }, 0);
+      });
+      card.addEventListener('dragend', function() { card.classList.remove('dragging'); });
+      card.addEventListener('dragover', function(e) { e.preventDefault(); card.classList.add('drag-over'); });
+      card.addEventListener('dragleave', function() { card.classList.remove('drag-over'); });
+      card.addEventListener('drop', function(e) {
+        e.preventDefault();
+        card.classList.remove('drag-over');
+        var srcId = parseInt(e.dataTransfer.getData('text/plain'));
+        var dstId = p.id;
+        if (srcId === dstId) return;
+        // Переставляємо в DOM
+        var srcCard = list.querySelector('[data-id="' + srcId + '"]');
+        if (srcCard) list.insertBefore(srcCard, card);
+        saveFavoritesOrder();
+      });
+    }
+
+    var avatar;
+    if (p.cover_url) { avatar = document.createElement('img'); avatar.className = 'person-avatar'; avatar.src = p.cover_url; }
+    else { avatar = document.createElement('div'); avatar.className = 'person-avatar-ph'; avatar.textContent = '👤'; }
+
+    var info = document.createElement('div'); info.className = 'person-info';
+    var nameEl = document.createElement('div');
+    nameEl.className = 'person-name' + (!p.name ? ' unnamed' : '');
+    nameEl.textContent = p.name || 'Без імені';
+    var subEl = document.createElement('div');
+    var sim = highlightIds ? highlightIds[p.id] : null;
+    if (sim) { subEl.className = 'person-match'; subEl.textContent = '✓ Збіг ' + sim + '%'; }
+    else { subEl.className = 'person-sub'; subEl.textContent = p.photo_count + ' фото'; }
+    info.appendChild(nameEl); info.appendChild(subEl);
+
+    card.appendChild(avatar); card.appendChild(info);
+
+    // Action buttons (з'являються при hover) + зірочка
+    var actions = document.createElement('div');
+    actions.className = 'person-card-actions';
+    var favBtn = document.createElement('button');
+    favBtn.className = 'fav-btn' + (p.is_favorite ? ' active' : '');
+    favBtn.textContent = '⭐';
+    favBtn.title = p.is_favorite ? 'Прибрати з обраних' : 'Додати в обрані';
+    favBtn.addEventListener('click', (function(pid){ return function(e){ e.stopPropagation(); toggleFavorite(pid); }; })(p.id));
+    var mergeCardBtn = document.createElement('button');
+    mergeCardBtn.className = 'card-action-btn';
+    mergeCardBtn.textContent = '🔗';
+    mergeCardBtn.title = 'Злити з іншою людиною';
+    mergeCardBtn.addEventListener('click', (function(pid){ return function(e){ e.stopPropagation(); openMergeModal(pid); }; })(p.id));
+    var delCardBtn = document.createElement('button');
+    delCardBtn.className = 'card-action-btn red';
+    delCardBtn.textContent = '✕';
+    delCardBtn.title = 'Видалити';
+    delCardBtn.addEventListener('click', (function(pid, pname){ return function(e){ e.stopPropagation(); deletePerson(pid, pname); }; })(p.id, p.name));
+    actions.appendChild(favBtn);
+    actions.appendChild(mergeCardBtn);
+    actions.appendChild(delCardBtn);
+    card.appendChild(actions);
+
+    card.addEventListener('click', (function(person){ return function(){ openPerson(person); }; })(p));
+    list.appendChild(card);
+  });
+  personsLoading = false;
+}
+
+async function toggleFavorite(pid) {
+  var r = await fetch('/api/persons/' + pid + '/favorite', {method:'POST'});
+  var d = await r.json();
+  if (!d.ok) return;
+  var list = document.getElementById('personList');
+  var card = list.querySelector('[data-id="' + pid + '"]');
+  if (!card) return;
+  var isFav = d.is_favorite;
+  card.dataset.fav = isFav ? '1' : '0';
+  var btn = card.querySelector('.fav-btn');
+  if (btn) {
+    btn.className = 'fav-btn' + (isFav ? ' active' : '');
+    btn.title = isFav ? 'Прибрати з обраних' : 'Додати в обрані';
+  }
+  // Переміщуємо картку в правильне місце
+  var divider = document.getElementById('favDivider');
+  if (isFav) {
+    // Додаємо в обрані — вставляємо перед роздільником або на початок
+    card.draggable = true;
+    if (divider) list.insertBefore(card, divider);
+    else list.insertBefore(card, list.firstChild);
+    // Якщо роздільника не було — створюємо
+    if (!divider) {
+      var nextCard = list.querySelector('.person-card[data-fav="0"]');
+      if (nextCard) {
+        var div = document.createElement('div');
+        div.className = 'favorites-divider';
+        div.id = 'favDivider';
+        div.textContent = '— решта —';
+        list.insertBefore(div, nextCard);
+      }
+    }
+    saveFavoritesOrder();
+  } else {
+    // Прибираємо з обраних — вставляємо після роздільника
+    card.draggable = false;
+    if (divider && divider.nextSibling) list.insertBefore(card, divider.nextSibling);
+    else list.appendChild(card);
+    // Якщо більше немає обраних — прибираємо роздільник
+    var anyFav = list.querySelector('.person-card[data-fav="1"]');
+    if (!anyFav && divider) divider.remove();
+  }
+}
+
+function saveFavoritesOrder() {
+  var list = document.getElementById('personList');
+  var ids = [];
+  list.querySelectorAll('.person-card[data-fav="1"]').forEach(function(c){ ids.push(parseInt(c.dataset.id)); });
+  fetch('/api/persons/reorder', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})});
+}
+
+var personsSort = 'count'; // 'count' | 'name'
+
+function setPersonsSort(sort) {
+  personsSort = sort;
+  document.getElementById('sortByCount').classList.toggle('active-sort', sort === 'count');
+  document.getElementById('sortByName').classList.toggle('active-sort', sort === 'name');
+  allPersonsCache = {};
+  loadPersons(null);
+}
+var personSearchTimer = null;
+function onPersonSearch(q) {
+  var clr = document.getElementById('personSearchClear');
+  if (clr) clr.style.display = q ? '' : 'none';
+  clearTimeout(personSearchTimer);
+  personSearchTimer = setTimeout(function() {
+    personsSearchQuery = q;
+    currentHighlightIds = null;
+    allPersonsCache = {};
+    loadPersons(null);
+  }, 300);
+}
+function clearPersonSearch() {
+  var inp = document.getElementById('personSearch');
+  var clr = document.getElementById('personSearchClear');
+  if (inp) { inp.value = ''; }
+  if (clr) clr.style.display = 'none';
+  personsSearchQuery = '';
+  currentHighlightIds = null;
+  allPersonsCache = {};
+  loadPersons(null);
+}
+
+function onPersonListScroll(el) {
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+    loadMorePersons(null);
+  }
+}
+
+async function openPerson(p) {
+  currentPersonId = p.id;
+  document.querySelectorAll('.person-card').forEach(function(c){ c.classList.toggle('active', +c.dataset.id === p.id); });
+  var content = document.getElementById('contentArea');
+  content.innerHTML = '';
+
+  // Header
+  var hdr = document.createElement('div'); hdr.className = 'content-header';
+  var h2 = document.createElement('h2'); h2.textContent = p.name || 'Без імені';
+
+  var nameWrap = document.createElement('div'); nameWrap.className = 'name-wrap';
+  var inp = document.createElement('input'); inp.className = 'name-input';
+  inp.placeholder = 'Підписати людину...'; inp.value = p.name || '';
+  var badge = document.createElement('span'); badge.className = 'save-badge'; badge.textContent = '✓ Збережено';
+  nameWrap.appendChild(inp); nameWrap.appendChild(badge);
+  inp.addEventListener('change', function() { renamePerson(p.id, inp.value, h2, badge, inp); });
+
+  var actions = document.createElement('div'); actions.className = 'header-actions';
+  var mergeBtn = document.createElement('button'); mergeBtn.className = 'btn btn-secondary';
+  mergeBtn.textContent = '🔗 Злити'; mergeBtn.style.fontSize = '12px'; mergeBtn.style.padding = '5px 10px';
+  mergeBtn.onclick = function(){ openMergeModal(p.id); };
+  var hideBtn = document.createElement('button'); hideBtn.className = 'btn btn-danger';
+  hideBtn.textContent = '🗑 Видалити'; hideBtn.style.fontSize = '12px'; hideBtn.style.padding = '5px 10px';
+  hideBtn.onclick = function(){ deletePerson(p.id, p.name); };
+  var closeBtn = document.createElement('button'); closeBtn.className = 'close-gallery-btn';
+  closeBtn.textContent = '✕ Закрити'; closeBtn.onclick = function(){ closeGallery(); };
+  actions.appendChild(mergeBtn); actions.appendChild(hideBtn); actions.appendChild(closeBtn);
+
+  var cnt = document.createElement('span'); cnt.style.cssText = 'color:var(--text-dim);font-size:12px;white-space:nowrap';
+  cnt.textContent = p.photo_count + ' фото';
+
+  var hdrMsg = document.createElement('span'); hdrMsg.id = 'hdrMsg';
+  hdrMsg.style.cssText = 'font-size:12px;font-weight:600;opacity:0;transition:opacity .25s;white-space:nowrap';
+
+  hdr.appendChild(h2); hdr.appendChild(nameWrap); hdr.appendChild(cnt); hdr.appendChild(hdrMsg); hdr.appendChild(actions);
+  content.appendChild(hdr);
+
+  // Повідомлення в хедері (біля кнопок злити/видалити)
+  var _hdrMsgTimer = null;
+  window.toastHeader = function(msg, type) {
+    var el = document.getElementById('hdrMsg');
+    if (!el) { toast(msg, type); return; }
+    el.textContent = msg;
+    el.style.color = type === 'success' ? 'var(--green)' : type === 'error' ? 'var(--red)' : 'var(--text-dim)';
+    el.style.opacity = '1';
+    if (_hdrMsgTimer) clearTimeout(_hdrMsgTimer);
+    _hdrMsgTimer = setTimeout(function(){ el.style.opacity = '0'; }, 2500);
+  };
+
+  // Loading spinner
+  var galleryWrap = document.createElement('div'); galleryWrap.className = 'gallery-wrap';
+  var grid = document.createElement('div'); grid.className = 'photo-grid'; grid.id = 'photoGrid';
+  grid.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Завантаження...</p></div>';
+  grid.addEventListener('click', function(e) {
+    if (selectedPhotoIds.size > 0 && !e.target.closest('.photo-card')) clearSelection();
+  });
+  var timeline = document.createElement('div'); timeline.className = 'timeline'; timeline.id = 'photoTimeline';
+
+  // Панель вибору фото
+  var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
+  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.style.cssText = 'color:var(--text);font-size:13px;font-weight:600;flex:1';
+  var moveNewBtn = document.createElement('button'); moveNewBtn.className = 'btn btn-primary'; moveNewBtn.textContent = '➕ Нова людина';
+  moveNewBtn.onclick = function(){ moveSelectedToNew(); };
+  var moveExistBtn = document.createElement('button'); moveExistBtn.className = 'btn btn-secondary'; moveExistBtn.textContent = '👤 До існуючої';
+  moveExistBtn.onclick = function(){ openMoveToExistingModal(); };
+  var removeSelBtn = document.createElement('button'); removeSelBtn.className = 'btn'; removeSelBtn.textContent = '✕ Прибрати з групи';
+  removeSelBtn.style.cssText = 'background:rgba(248,113,113,.15);border:1px solid var(--red);color:var(--red)';
+  removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
+  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
+  cancelSelBtn.onclick = function(){ clearSelection(); };
+  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(cancelSelBtn);
+
+  galleryWrap.appendChild(grid);
+  galleryWrap.appendChild(selBar);
+  galleryWrap.appendChild(timeline);
+  content.appendChild(galleryWrap);
+
+  // ---- Ініціалізація стану ----
+  allYearsOriginal = [];
+  loadedYears = {};
+  bottomYearIdx = 0;
+  topYearIdx = -1;
+  currentAbort = null;
+  currentPhotos = [];
+  lastRenderedYear = null;
+
+  // Отримуємо список років (DESC: 2025, 2024, ...)
+  try {
+    var yearsResp = await fetch('/api/persons/' + p.id + '/years');
+    allYearsOriginal = await yearsResp.json();
+  } catch(e) { allYearsOriginal = []; }
+  updateTimeline(allYearsOriginal);
+
+  if (!allYearsOriginal.length) {
+    // Немає дат — завантажуємо всі фото без фільтра
+    var r2 = await fetch('/api/persons/' + p.id + '/photos?limit=200&offset=0');
+    var batch0 = await r2.json();
+    if (!batch0.length) {
+      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🖼️</div><p>Фото не знайдено</p></div>';
+      return;
+    }
+    batch0.forEach(function(ph, i) { currentPhotos.push(ph); appendPhotoCard(ph, i, grid); });
+    return;
+  }
+
+  // ---- Завантаження одного року (знизу або по кліку) ----
+  // Фото додаються в КІНЕЦЬ grid (хронологічно від нового до старого)
+  loadYear = async function(yr, abortSignal) {
+    if (loadedYears[yr] || loadedYears[yr + '_loading']) return;
+    loadedYears[yr + '_loading'] = true;
+    var offset = 0;
+    var batchSize = 200;
+    while (true) {
+      if (abortSignal && abortSignal.aborted) return;
+      try {
+        var r2 = await fetch('/api/persons/' + p.id + '/photos?year=' + yr + '&limit=' + batchSize + '&offset=' + offset);
+        if (abortSignal && abortSignal.aborted) return;
+        var batch = await r2.json();
+        if (!batch.length) break;
+        var scrollBefore = grid.scrollTop;
+        batch.forEach(function(ph) { currentPhotos.push(ph); appendPhotoCard(ph, currentPhotos.length - 1, grid); });
+        offset += batch.length;
+        if (scrollBefore > 0) grid.scrollTop = scrollBefore;
+        if (batch.length < batchSize) break;
+        await new Promise(function(res){ setTimeout(res, 30); });
+      } catch(e) { break; }
+    }
+    if (!abortSignal || !abortSignal.aborted) {
+      loadedYears[yr] = true;
+      // Оновлюємо bottomYearIdx — наступний незавантажений знизу
+      while (bottomYearIdx < allYearsOriginal.length && loadedYears[allYearsOriginal[bottomYearIdx]]) {
+        bottomYearIdx++;
+      }
+      updateSentinel();
+      updateTopBtn();
+      // Якщо grid ще не скролиться — авто-завантажуємо наступний рік
+      setTimeout(function() {
+        var g = document.getElementById('photoGrid');
+        if (g && g.scrollHeight <= g.clientHeight + 50 && bottomYearIdx < allYearsOriginal.length) {
+          currentAbort = new AbortController();
+          loadYear(allYearsOriginal[bottomYearIdx], currentAbort.signal);
+        }
+      }, 150);
+    }
+  };
+
+  // ---- Завантаження року ВГОРУ (перед поточним вмістом) ----
+  // При кліку "завантажити вгору" — просто перезавантажуємо галерею з того року
+  // (DOM-вставка вгору занадто складна і глючить з сепараторами)
+  loadYearTop = async function(yr) {
+    if (currentAbort) currentAbort.abort();
+    if (window._photoScrollFn) {
+      var g0 = document.getElementById('photoGrid');
+      if (g0) g0.removeEventListener('scroll', window._photoScrollFn);
+      window._photoScrollFn = null;
+    }
+    var g = document.getElementById('photoGrid');
+    if (!g) return;
+    g.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>';
+    currentPhotos = [];
+    lastRenderedYear = null;
+    loadedYears = {};
+    // Починаємо з вибраного (новішого) року
+    var startIdx = allYearsOriginal.indexOf(yr);
+    if (startIdx < 0) startIdx = 0;
+    bottomYearIdx = startIdx;
+    topYearIdx = startIdx - 1;
+    g.innerHTML = '';
+    currentAbort = new AbortController();
+    await loadYear(yr, currentAbort.signal);
+    // Скролимо до початку
+    g.scrollTop = 0;
+  };
+
+  function updateTopBtn() {
+    var existing = document.getElementById('loadPrevBtn');
+    if (existing) existing.remove();
+    // topYearIdx = індекс у allYearsOriginal що треба завантажити вгору
+    // Знаходимо найменший завантажений idx (найновіший рік у grid)
+    var firstLoadedIdx = -1;
+    for (var i = 0; i < allYearsOriginal.length; i++) {
+      if (loadedYears[allYearsOriginal[i]]) { firstLoadedIdx = i; break; }
+    }
+    if (firstLoadedIdx <= 0) return; // вже найновіший або немає завантажених
+    topYearIdx = firstLoadedIdx - 1;
+    var prevYr = allYearsOriginal[topYearIdx];
+    if (!prevYr || loadedYears[prevYr] || loadedYears[prevYr + '_loading']) return;
+    var g = document.getElementById('photoGrid');
+    if (!g) return;
+    var btn = document.createElement('div');
+    btn.id = 'loadPrevBtn';
+    btn.style.cssText = 'grid-column:1/-1;display:flex;justify-content:center;padding:12px 0';
+    var b = document.createElement('button');
+    b.className = 'btn btn-secondary';
+    b.textContent = '↑ Завантажити ' + prevYr + ' рік';
+    b.onclick = async function() {
+      b.disabled = true;
+      b.textContent = 'Завантаження...';
+      var ab = new AbortController();
+      await loadYearTop(prevYr, ab.signal);
+    };
+    btn.appendChild(b);
+    g.insertBefore(btn, g.firstChild);
+  }
+
+  function updateSentinel() {
+    var existing = document.getElementById('loadMoreBtn');
+    if (existing) existing.remove();
+    if (window._photoScrollFn) {
+      var g2 = document.getElementById('photoGrid');
+      if (g2) g2.removeEventListener('scroll', window._photoScrollFn);
+      window._photoScrollFn = null;
+    }
+    if (bottomYearIdx >= allYearsOriginal.length) return; // всі роки знизу завантажені
+    var sentinel = document.createElement('div');
+    sentinel.id = 'loadMoreBtn';
+    sentinel.style.cssText = 'grid-column:1/-1;height:20px;background:transparent';
+    grid.appendChild(sentinel);
+    window._photoScrollFn = function() {
+      if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 300) {
+        if (bottomYearIdx < allYearsOriginal.length && !loadedYears[allYearsOriginal[bottomYearIdx] + '_loading']) {
+          currentAbort = new AbortController();
+          loadYear(allYearsOriginal[bottomYearIdx], currentAbort.signal);
+        }
+      }
+    };
+    grid.addEventListener('scroll', window._photoScrollFn);
+  }
+
+  // Завантажуємо перший рік (найновіший)
+  grid.innerHTML = '';
+  currentAbort = new AbortController();
+  await loadYear(allYearsOriginal[0], currentAbort.signal);
+}
+
+function closeGallery() {
+  currentPersonId = null;
+  currentPhotos = [];
+  document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
+  document.getElementById('contentArea').innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><p>Обери людину зліва або запусти індексацію архіву</p></div>';
+}
+
+async function renamePerson(id, name, h2El, badge, anchorEl) {
+  await fetch('/api/persons/' + id, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:name})});
+  if (h2El) h2El.textContent = name || 'Без імені';
+  if (badge) { badge.classList.add('show'); setTimeout(function(){ badge.classList.remove('show'); }, 2000); }
+  toastNear(anchorEl || badge, '✓ Збережено', 'success');
+  loadPersons(null);
+}
+
+async function deletePerson(id, name) {
+  showConfirm(
+    'Видалити людину?',
+    'Людина "' + (name || 'Без імені') + '" буде видалена зі списку. Оригінальні фото в папках залишаться.',
+    '⚠ Цю дію не можна скасувати',
+    '🗑 Видалити',
+    async function() {
+      await fetch('/api/persons/' + id, {method:'DELETE'});
+      toastHeader('✓ Видалено', 'success');
+      closeGallery();
+      loadPersons(null);
+    }
+  );
+}
+
+async function removePhotoFromPerson(photoId, idx) {
+  await fetch('/api/photos/' + photoId + '/unlink', {method:'POST'});
+  var realIdx = currentPhotos.findIndex(function(ph){ return ph.id === photoId; });
+  if (realIdx >= 0) currentPhotos.splice(realIdx, 1);
+  var grid = document.getElementById('photoGrid');
+  if (grid) {
+    var cards = grid.querySelectorAll('.photo-card');
+    var removeIdx = realIdx >= 0 ? realIdx : idx;
+    if (cards[removeIdx]) cards[removeIdx].remove();
+  }
+  toast('Фото прибрано з групи', 'success');
+  loadPersons(null);
+}
+
+async function removePhotoFromPersonByPath(photoId, cardEl, anchorEl) {
+  await fetch('/api/photos/' + photoId + '/unlink', {method:'POST'});
+  var realIdx = currentPhotos.findIndex(function(ph){ return ph.id === photoId; });
+  if (realIdx >= 0) currentPhotos.splice(realIdx, 1);
+  if (cardEl && cardEl.parentNode) cardEl.remove();
+  toastNear(anchorEl, '✓ Прибрано', 'success');
+  loadPersons(null);
+}
+
+async function setCover(photoId, personId, anchorEl) {
+  var r = await fetch('/api/photos/' + photoId + '/face-for-person/' + personId);
+  var d = await r.json();
+  if (d.face_id) {
+    await fetch('/api/persons/' + personId, {method:'PATCH', headers:{'Content-Type':'application/json'}, body:JSON.stringify({cover_face_id: d.face_id})});
+    toastNear(anchorEl, '✓ Обкладинку встановлено', 'success');
+    loadPersons(null);
+  } else {
+    toastNear(anchorEl, 'Не вдалося знайти обличчя', 'error');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lightbox slider
+// ---------------------------------------------------------------------------
+function openLightbox(idx) {
+  lbIndex = idx;
+  document.getElementById('lightbox').classList.add('open');
+  renderLb();
+}
+function closeLightbox() {
+  lbStopPlay();
+  document.getElementById('lightbox').classList.remove('open');
+  lbResetZoom();
+}
+
+// ---- Zoom & Pan ----
+var lbScale = 1;
+var lbTransX = 0;
+var lbTransY = 0;
+var lbDragging = false;
+var lbDragStart = null;
+
+function lbResetZoom() {
+  lbScale = 1; lbTransX = 0; lbTransY = 0;
+  var img = document.getElementById('lbImg');
+  if (img) {
+    img.style.transform = '';
+    img.classList.remove('zoomed', 'dragging');
+  }
+}
+
+function lbApplyTransform() {
+  var img = document.getElementById('lbImg');
+  if (!img) return;
+  img.style.transform = 'translate(' + lbTransX + 'px,' + lbTransY + 'px) scale(' + lbScale + ')';
+  img.classList.toggle('zoomed', lbScale > 1);
+}
+
+// Скидаємо зум при зміні фото
+var _origRenderLb = null;
+(function(){
+  var orig = renderLb;
+  renderLb = function() { lbResetZoom(); orig(); };
+})();
+
+// Колесо миші — зум
+document.getElementById('lightbox').addEventListener('wheel', function(e) {
+  if (!document.getElementById('lightbox').classList.contains('open')) return;
+  e.preventDefault();
+  var delta = e.deltaY > 0 ? 0.85 : 1.18;
+  lbScale = Math.min(8, Math.max(1, lbScale * delta));
+  if (lbScale === 1) { lbTransX = 0; lbTransY = 0; }
+  lbApplyTransform();
+}, {passive: false});
+
+// Подвійний клік — zoom in/out
+document.getElementById('lbImg').addEventListener('dblclick', function(e) {
+  e.stopPropagation();
+  if (lbScale > 1) {
+    lbResetZoom();
+  } else {
+    lbScale = 2.5;
+    // Зумуємо відносно точки кліку
+    var img = e.currentTarget;
+    var rect = img.getBoundingClientRect();
+    var cx = e.clientX - rect.left - rect.width / 2;
+    var cy = e.clientY - rect.top - rect.height / 2;
+    lbTransX = -cx * (lbScale - 1) / lbScale;
+    lbTransY = -cy * (lbScale - 1) / lbScale;
+    lbApplyTransform();
+  }
+});
+
+// Перетягування при зумі
+document.getElementById('lbImg').addEventListener('mousedown', function(e) {
+  if (lbScale <= 1) return;
+  e.preventDefault();
+  lbDragging = true;
+  lbDragStart = {x: e.clientX - lbTransX, y: e.clientY - lbTransY};
+  var img = e.currentTarget;
+  img.classList.add('dragging');
+});
+document.addEventListener('mousemove', function(e) {
+  if (!lbDragging) return;
+  lbTransX = e.clientX - lbDragStart.x;
+  lbTransY = e.clientY - lbDragStart.y;
+  lbApplyTransform();
+});
+document.addEventListener('mouseup', function() {
+  if (!lbDragging) return;
+  lbDragging = false;
+  var img = document.getElementById('lbImg');
+  if (img) img.classList.remove('dragging');
+});
+var lbCache = {}; // path -> blob URL
+
+function preloadLb(idx) {
+  if (idx < 0 || idx >= currentPhotos.length) return;
+  var ph = currentPhotos[idx];
+  if (lbCache[ph.path]) return;
+  fetch('/api/photo/image?path=' + encodeURIComponent(ph.path))
+    .then(function(r){ return r.blob(); })
+    .then(function(blob){ lbCache[ph.path] = URL.createObjectURL(blob); })
+    .catch(function(){});
+}
+
+function renderLb() {
+  if (!currentPhotos.length) return;
+  var ph = currentPhotos[lbIndex];
+  var img = document.getElementById('lbImg');
+  document.getElementById('lbCounter').textContent = (lbIndex + 1) + ' / ' + currentPhotos.length;
+
+  if (lbCache[ph.path]) {
+    img.src = lbCache[ph.path];
+    img.style.opacity = '1';
+  } else {
+    img.src = ph.thumb;
+    img.style.opacity = '0.5';
+    fetch('/api/photo/image?path=' + encodeURIComponent(ph.path))
+      .then(function(r){ return r.blob(); })
+      .then(function(blob){
+        var url = URL.createObjectURL(blob);
+        lbCache[ph.path] = url;
+        if (currentPhotos[lbIndex] && currentPhotos[lbIndex].path === ph.path) {
+          img.src = url;
+          img.style.opacity = '1';
+        }
+      })
+      .catch(function(){ img.style.opacity = '1'; });
+  }
+  // Preload neighbours
+  preloadLb(lbIndex + 1);
+  preloadLb(lbIndex + 2);
+  preloadLb(lbIndex - 1);
+}
+
+function lbNext() { if (lbIndex < currentPhotos.length - 1) { lbIndex++; renderLb(); } }
+function lbPrev() { if (lbIndex > 0) { lbIndex--; renderLb(); } }
+function lbOpenFolder() {
+  if (currentPhotos[lbIndex]) openInExplorerPath(currentPhotos[lbIndex].path);
+}
+document.addEventListener('keydown', function(e) {
+  if (!document.getElementById('lightbox').classList.contains('open')) return;
+  if (e.key === 'Escape') closeLightbox();
+  if (e.key === 'ArrowRight') lbNext();
+  if (e.key === 'ArrowLeft') lbPrev();
+  if (e.key === ' ') { e.preventDefault(); lbTogglePlay(); }
+});
+
+// ---- Slideshow ----
+var lbPlayTimer = null;
+var LB_INTERVAL = 3000;
+
+function lbTogglePlay() {
+  if (lbPlayTimer) {
+    lbStopPlay();
+  } else {
+    lbStartPlay();
+  }
+}
+
+function lbStartPlay() {
+  var btn = document.getElementById('lbPlayBtn');
+  if (btn) btn.textContent = '⏸';
+  lbPlayTimer = setInterval(function() {
+    if (lbIndex < currentPhotos.length - 1) {
+      lbIndex++;
+      renderLb();
+    } else {
+      lbStopPlay(); // зупиняємось на останньому
+    }
+  }, LB_INTERVAL);
+}
+
+function lbStopPlay() {
+  if (lbPlayTimer) { clearInterval(lbPlayTimer); lbPlayTimer = null; }
+  var btn = document.getElementById('lbPlayBtn');
+  if (btn) btn.textContent = '▶';
+}
+
+// ---------------------------------------------------------------------------
+// Photo card helper
+// ---------------------------------------------------------------------------
+var lastRenderedYear = null;
+
+function updateTimeline(years) {
+  var tl = document.getElementById('photoTimeline');
+  if (!tl) return;
+  tl.innerHTML = '';
+  var unique = [];
+  years.forEach(function(y) { if (y && unique.indexOf(y) === -1) unique.push(y); });
+  unique.sort(function(a,b){ return b-a; });
+  unique.forEach(function(y) {
+    var el = document.createElement('div');
+    el.className = 'timeline-year';
+    el.textContent = y;
+    el.dataset.year = y;
+    el.onclick = async function() {
+      document.querySelectorAll('.timeline-year').forEach(function(e){ e.classList.remove('active'); });
+      el.classList.add('active');
+      // Скасовуємо поточне завантаження
+      if (currentAbort) currentAbort.abort();
+      if (window._photoScrollFn) {
+        var g0 = document.getElementById('photoGrid');
+        if (g0) g0.removeEventListener('scroll', window._photoScrollFn);
+        window._photoScrollFn = null;
+      }
+      var grid = document.getElementById('photoGrid');
+      if (!grid) return;
+      grid.innerHTML = '<div style="grid-column:1/-1;padding:20px;text-align:center"><div class="spinner" style="margin:0 auto"></div></div>';
+      currentPhotos = [];
+      lastRenderedYear = null;
+      // Починаємо з вибраного року — allYearsOriginal НЕ змінюємо
+      // bottomYearIdx = індекс вибраного року, topYearIdx = індекс вище
+      loadedYears = {};
+      var startIdx = allYearsOriginal.indexOf(y);
+      if (startIdx < 0) startIdx = 0;
+      bottomYearIdx = startIdx; // loadYear сам просуне його вперед
+      topYearIdx = startIdx - 1;
+      grid.innerHTML = '';
+      if (typeof loadYear === 'function') {
+        currentAbort = new AbortController();
+        await loadYear(y, currentAbort.signal);
+        setTimeout(function() {
+          var m = document.getElementById('year-' + y);
+          if (m) m.scrollIntoView({behavior:'smooth', block:'start'});
+        }, 50);
+      }
+    };
+    tl.appendChild(el);
+  });
+}
+
+function appendPhotoCard(ph, idx, grid) {
+  // Year separator
+  if (ph.year && ph.year !== lastRenderedYear) {
+    var sep = document.createElement('div');
+    sep.id = 'year-' + ph.year;
+    sep.style.cssText = 'grid-column:1/-1;padding:8px 4px 2px;font-size:11px;font-weight:700;color:var(--text-dim);letter-spacing:.5px;border-top:1px solid var(--border);margin-top:4px';
+    sep.textContent = ph.year;
+    var loadMore = document.getElementById('loadMoreBtn');
+    if (loadMore) grid.insertBefore(sep, loadMore);
+    else grid.appendChild(sep);
+    lastRenderedYear = ph.year;
+  }
+
+  var card = document.createElement('div'); card.className = 'photo-card';
+  card.dataset.photoId = ph.id;
+  var img = document.createElement('img'); img.src = ph.thumb; img.loading = 'lazy';
+
+  // Чекбокс вибору
+  var cb = document.createElement('input'); cb.type = 'checkbox'; cb.className = 'photo-select-cb';
+  cb.addEventListener('click', (function(phId){ return function(e){
+    e.stopPropagation();
+    var card = e.currentTarget.closest('.photo-card');
+    if (e.shiftKey && lastSelectedIdx >= 0) {
+      selectRange(phId, card);
+    } else {
+      togglePhotoSelect(phId, card);
+    }
+  }; })(ph.id));
+  var overlay = document.createElement('div'); overlay.className = 'photo-overlay';
+  var openBtn = document.createElement('button'); openBtn.className = 'overlay-btn';
+  openBtn.textContent = '📂 Відкрити';
+  openBtn.addEventListener('click', (function(path){ return function(e){ e.stopPropagation(); openInExplorerPath(path); }; })(ph.path));
+  var removeBtn = document.createElement('button'); removeBtn.className = 'overlay-btn red';
+  removeBtn.textContent = '✕ Прибрати';
+  removeBtn.addEventListener('click', (function(phId){ return function(e){ e.stopPropagation(); var card = e.currentTarget.closest('.photo-card'); removePhotoFromPersonByPath(phId, card, e.currentTarget); }; })(ph.id));
+  overlay.appendChild(openBtn); overlay.appendChild(removeBtn);
+  var coverBtn = document.createElement('button'); coverBtn.className = 'set-cover-btn';
+  coverBtn.textContent = '⭐ Обкладинка';
+  coverBtn.addEventListener('click', (function(phId){ return function(e){ e.stopPropagation(); setCover(phId, currentPersonId, e.currentTarget); }; })(ph.id));
+  card.appendChild(img); card.appendChild(cb); card.appendChild(overlay); card.appendChild(coverBtn);
+  card.addEventListener('click', (function(phId){ return function(e){
+    if (e.shiftKey) e.preventDefault(); // блокуємо системне виділення тексту
+    if (selectedPhotoIds.size > 0) {
+      if (e.shiftKey && lastSelectedIdx >= 0) {
+        selectRange(phId, e.currentTarget);
+      } else {
+        togglePhotoSelect(phId, e.currentTarget);
+      }
+      return;
+    }
+    var i2 = currentPhotos.findIndex(function(x){ return x.id === phId; });
+    if (i2 >= 0) openLightbox(i2);
+  }; })(ph.id));
+  var loadMore = document.getElementById('loadMoreBtn');
+  if (loadMore) grid.insertBefore(card, loadMore);
+  else grid.appendChild(card);
+}
+
+// ---------------------------------------------------------------------------
+// Merge
+// ---------------------------------------------------------------------------
+async function openMergeModal(srcId) {
+  mergeSourceId = parseInt(srcId);
+  console.log("openMergeModal srcId=", srcId, "mergeSourceId=", mergeSourceId);
+  document.getElementById('mergeSearch').value = '';
+  document.getElementById('mergeModal').classList.add('open');
+  // Always reload fresh list
+  var r = await fetch('/api/persons');
+  allPersonsCache = await r.json();
+  renderMergeList(Object.values(allPersonsCache));
+}
+function closeMergeModal() {
+  var modal = document.getElementById('mergeModal');
+  modal.classList.remove('open');
+  modal.dataset.mode = '';
+  var title = modal.querySelector('h3');
+  if (title) title.textContent = 'Злити з людиною';
+  mergeSourceId = null;
+}
+function filterMergeList(q) {
+  var filtered = Object.values(allPersonsCache).filter(function(p) {
+    if (p.id === mergeSourceId) return false;
+    return !q || (p.name || '').toLowerCase().includes(q.toLowerCase());
+  });
+  renderMergeList(filtered);
+}
+function renderMergeList(persons) {
+  var list = document.getElementById('mergeList');
+  list.innerHTML = '';
+  if (!persons || !persons.length) { list.innerHTML = '<div style="padding:12px;color:var(--text-dim);font-size:12px">Завантажте більше людей прокруткою списку</div>'; return; }
+  var modal = document.getElementById('mergeModal');
+  var isMove = modal.dataset.mode === 'move';
+  persons.filter(function(p){ return p.id !== mergeSourceId; }).forEach(function(p) {
+    var item = document.createElement('div'); item.className = 'modal-item';
+    var avatar;
+    if (p.cover_url) { avatar = document.createElement('img'); avatar.src = p.cover_url; }
+    else { avatar = document.createElement('div'); avatar.className = 'modal-item-ph'; avatar.textContent = '👤'; }
+    var info = document.createElement('div');
+    var name = document.createElement('div'); name.className = 'modal-item-name'; name.textContent = p.name || 'Без імені';
+    var count = document.createElement('div'); count.className = 'modal-item-count'; count.textContent = p.photo_count + ' фото';
+    info.appendChild(name); info.appendChild(count);
+    item.appendChild(avatar); item.appendChild(info);
+    if (isMove) {
+      item.addEventListener('click', (function(dstId, dstName){ return function(){ clickMove(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
+    } else {
+      item.addEventListener('click', (function(dstId, dstName){ return function(){ clickMerge(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
+    }
+    list.appendChild(item);
+  });
+}
+function clickMerge(dstId, dstName) {
+  var srcId = mergeSourceId;
+  closeMergeModal();
+  showConfirm(
+    'Злити людей?',
+    'Всі фото цієї людини будуть додані до групи "' + dstName + '".',
+    '⚠ Цю дію не можна скасувати',
+    '🔗 Злити',
+    async function() {
+      var r = await fetch('/api/persons/merge', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({src_id: srcId, dst_id: dstId})});
+      var d = await r.json();
+      if (d.ok) {
+        toastHeader('✓ Злито успішно', 'success');
+        currentPersonId = dstId;
+        await loadPersons(null);
+        var r2 = await fetch('/api/persons');
+        var fresh = await r2.json();
+        allPersonsCache = fresh;
+        var dst = fresh.find(function(p){ return p.id === dstId; });
+        if (dst) openPerson(dst);
+      } else toastHeader('Помилка злиття', 'error');
+    }
+  );
+}
+async function clickMove(dstId, dstName) {
+  var ids = Array.from(selectedPhotoIds);
+  closeMergeModal();
+  var r = await fetch('/api/persons/split', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({photo_ids: ids, target_person_id: dstId})
+  });
+  var d = await r.json();
+  if (d.ok) {
+    ids.forEach(function(photoId) {
+      var card = document.querySelector('.photo-card[data-photo-id="' + photoId + '"]');
+      if (card) card.remove();
+      var idx = currentPhotos.findIndex(function(p){ return p.id === photoId; });
+      if (idx >= 0) currentPhotos.splice(idx, 1);
+    });
+    clearSelection();
+    await loadPersons(null);
+    // Відкриваємо цільову людину щоб перевірити
+    var dstPerson = await fetch('/api/persons/' + dstId).then(function(r){ return r.json(); });
+    if (dstPerson && dstPerson.id) openPerson(dstPerson);
+  } else {
+    toastHeader('Помилка переміщення', 'error');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+function clearPhotoSearch() {
+  currentHighlightIds = null;
+  var txt = document.getElementById('searchDropText');
+  var res = document.getElementById('searchDropResult');
+  if (txt) txt.style.display = '';
+  if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+  loadPersons(null);
+}
+
+var searchDrop = document.getElementById('searchDrop');
+searchDrop.addEventListener('dragover', function(e){ e.preventDefault(); searchDrop.classList.add('drag'); });
+searchDrop.addEventListener('dragleave', function(){ searchDrop.classList.remove('drag'); });
+searchDrop.addEventListener('drop', function(e){ e.preventDefault(); searchDrop.classList.remove('drag'); var f=e.dataTransfer.files[0]; if(f) searchByFile(f); });
+
+var currentHighlightIds = null;
+
+async function searchByFile(file) {
+  if (!file) return;
+  var txt = document.getElementById('searchDropText');
+  var res = document.getElementById('searchDropResult');
+  if (txt) txt.textContent = '⏳ Шукаємо...';
+  if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+  currentHighlightIds = null;
+  var fd = new FormData(); fd.append('file', file);
+  try {
+    var r = await fetch('/api/search', {method:'POST', body:fd});
+    var d = await r.json();
+    if (txt) txt.textContent = '⬆ Кинь або обери фото людини';
+    if (d.error) { toast(d.error, 'error'); return; }
+    if (!d.persons || !d.persons.length) { toast('Нікого не знайдено', ''); return; }
+    var map = {};
+    d.persons.forEach(function(pr){ map[pr.id] = pr.similarity; });
+    currentHighlightIds = map;
+    if (res) {
+      res.style.display = 'block';
+      res.innerHTML = '<span style="color:var(--green)">✓ Знайдено: ' + d.persons.length + '</span>'
+        + ' <button onclick="event.stopPropagation();clearPhotoSearch()" style="background:none;border:1px solid var(--border);border-radius:4px;color:var(--text-dim);font-size:11px;padding:2px 6px;cursor:pointer">✕ очистити</button>';
+    }
+    loadPersons(map);
+  } catch(e) {
+    if (txt) txt.textContent = '⬆ Кинь або обери фото людини';
+    toast('Помилка пошуку', 'error');
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Explorer
+// ---------------------------------------------------------------------------
+async function openInExplorerPath(path) {
+  await fetch('/api/photo/open?path=' + encodeURIComponent(path));
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+loadFolders();
+loadPersons(null);
+fetchStatus();
+setInterval(fetchStatus, 2000);
+setInterval(function(){
+  var dot = document.getElementById('statusDot');
+  if (dot && dot.classList.contains('active')) loadPersons(null);
+}, 30000);
+</script>
+</body>
+</html>
