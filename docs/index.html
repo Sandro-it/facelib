@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FaceLib — Інструкція</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-dim: #8b949e;
+    --accent: #1f6feb;
+    --cyan: #39d0f0;
+    --green: #3fb950;
+    --yellow: #d29922;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; line-height: 1.7; }
+
+  /* Header */
+  .hero { background: linear-gradient(135deg, #0d1117 0%, #1a2744 50%, #0d1117 100%); padding: 60px 20px; text-align: center; border-bottom: 1px solid var(--border); }
+  .hero-icon { font-size: 72px; margin-bottom: 16px; }
+  .hero h1 { font-size: 42px; font-weight: 700; background: linear-gradient(90deg, #fff, var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 8px; }
+  .hero p { color: var(--text-dim); font-size: 18px; max-width: 600px; margin: 0 auto; }
+
+  /* Nav */
+  nav { background: var(--surface); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+  nav ul { display: flex; list-style: none; max-width: 900px; margin: 0 auto; padding: 0 20px; overflow-x: auto; gap: 4px; }
+  nav a { display: block; padding: 14px 16px; color: var(--text-dim); text-decoration: none; font-size: 14px; white-space: nowrap; border-bottom: 2px solid transparent; transition: all .2s; }
+  nav a:hover { color: var(--text); border-bottom-color: var(--accent); }
+
+  /* Content */
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
+  section { margin-bottom: 60px; }
+  h2 { font-size: 28px; font-weight: 700; margin-bottom: 24px; padding-bottom: 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  h3 { font-size: 18px; font-weight: 600; margin: 24px 0 12px; color: var(--cyan); }
+  p { color: var(--text-dim); margin-bottom: 12px; }
+  strong { color: var(--text); }
+
+  /* Cards */
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 24px 0; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+  .card-icon { font-size: 32px; margin-bottom: 12px; }
+  .card h4 { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+  .card p { font-size: 14px; margin: 0; }
+
+  /* Steps */
+  .steps { counter-reset: step; }
+  .step { display: flex; gap: 16px; margin-bottom: 20px; align-items: flex-start; }
+  .step-num { counter-increment: step; background: var(--accent); color: #fff; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; font-size: 14px; }
+  .step-content h4 { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  .step-content p { font-size: 14px; margin: 0; }
+
+  /* Tips */
+  .tip { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--cyan); border-radius: 8px; padding: 14px 16px; margin: 12px 0; font-size: 14px; }
+  .tip strong { color: var(--cyan); }
+
+  /* Keyboard */
+  kbd { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 2px 8px; font-family: monospace; font-size: 13px; color: var(--text); }
+
+  /* Table */
+  .shortcuts { width: 100%; border-collapse: collapse; margin: 16px 0; }
+  .shortcuts th { text-align: left; padding: 10px 14px; background: var(--surface2); color: var(--text-dim); font-size: 13px; font-weight: 600; }
+  .shortcuts td { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 14px; color: var(--text-dim); }
+  .shortcuts td:first-child { color: var(--text); }
+
+  /* Badge */
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .badge-green { background: rgba(63,185,80,.15); color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+  .badge-yellow { background: rgba(210,153,34,.15); color: var(--yellow); border: 1px solid rgba(210,153,34,.3); }
+
+  /* Footer */
+  footer { text-align: center; padding: 40px 20px; border-top: 1px solid var(--border); color: var(--text-dim); font-size: 14px; }
+  footer a { color: var(--cyan); text-decoration: none; }
+
+  @media (max-width: 600px) {
+    .hero h1 { font-size: 28px; }
+    .cards { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="hero-icon">🎭</div>
+  <h1>FaceLib</h1>
+  <p>Локальна програма для розпізнавання облич у вашому фотоархіві. Всі дані зберігаються на вашому комп'ютері.</p>
+</div>
+
+<nav>
+  <ul>
+    <li><a href="#what">Що це?</a></li>
+    <li><a href="#install">Встановлення</a></li>
+    <li><a href="#start">Перший запуск</a></li>
+    <li><a href="#people">Люди</a></li>
+    <li><a href="#gallery">Галерея</a></li>
+    <li><a href="#search">Пошук</a></li>
+    <li><a href="#viewer">Перегляд фото</a></li>
+    <li><a href="#tips">Поради</a></li>
+  </ul>
+</nav>
+
+<div class="container">
+
+  <!-- Що це -->
+  <section id="what">
+    <h2>🤔 Що це таке?</h2>
+    <p>FaceLib — це програма яка <strong>автоматично знаходить і групує обличчя</strong> у вашому фотоархіві. Ви більше не будете гортати тисячі фото щоб знайти знімки конкретної людини — просто оберіть її ім'я і побачите всі фото разом.</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">🔍</div>
+        <h4>Розпізнавання облич</h4>
+        <p>Програма автоматично знаходить всі обличчя на фото і групує схожі разом.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📁</div>
+        <h4>Ваші фото, ваш комп'ютер</h4>
+        <p>Фото нікуди не завантажуються. Всі дані зберігаються локально на вашому ПК.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🗂</div>
+        <h4>Великі архіви</h4>
+        <p>Перевірено на архівах від 100 000+ фото. Швидко і надійно.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔎</div>
+        <h4>Пошук за фото</h4>
+        <p>Киньте будь-яке фото людини — програма знайде всі її знімки в архіві.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Встановлення -->
+  <section id="install">
+    <h2>💾 Встановлення</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Скачайте програму</h4>
+          <p>Натисніть зелену кнопку <strong>Code → Download ZIP</strong> на сторінці GitHub і збережіть архів.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>Розпакуйте архів</h4>
+          <p>Розпакуйте ZIP у будь-яку зручну папку, наприклад <strong>C:\FaceLib\</strong>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>Запустіть install.bat</h4>
+          <p>Двічі клікніть <strong>install.bat</strong> — відкриється вікно встановлення. Зачекайте 5-10 хвилин поки завантажаться всі компоненти.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-content">
+          <h4>Готово!</h4>
+          <p>На робочому столі з'явиться ярлик <strong>FaceLib</strong>. Двічі клікніть — програма відкриється в браузері.</p>
+        </div>
+      </div>
+    </div>
+    <div class="tip"><strong>Увага:</strong> Потрібен Python 3.10+. Якщо його немає — скачайте з <a href="https://python.org" style="color:var(--cyan)">python.org</a> і під час встановлення поставте галочку <strong>"Add to PATH"</strong>.</div>
+  </section>
+
+  <!-- Перший запуск -->
+  <section id="start">
+    <h2>🚀 Перший запуск</h2>
+    <p>Після першого відкриття програма порожня — треба додати папку з фото і запустити індексацію.</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Додайте папку з фото</h4>
+          <p>Введіть шлях до папки з фото (наприклад <strong>D:\Фото</strong>) або натисніть іконку папки і оберіть її. Потім натисніть <strong>+</strong>.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>Натисніть "Індексувати"</h4>
+          <p>Програма знайде всі обличчя на фото. Для великого архіву це може зайняти кілька годин — можна залишити на ніч.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>Підпишіть людей</h4>
+          <p>В списку зліва з'являться групи облич. Клікніть на групу, подивіться хто це, і введіть ім'я у полі вгорі.</p>
+        </div>
+      </div>
+    </div>
+    <div class="tip"><strong>Порада:</strong> Не обов'язково підписувати всіх одразу. Підпишіть найважливіших людей — вони одразу стануть доступні для пошуку.</div>
+  </section>
+
+  <!-- Люди -->
+  <section id="people">
+    <h2>👥 Список людей</h2>
+    <p>Зліва знаходиться список всіх людей яких програма знайшла у вашому архіві.</p>
+
+    <h3>Сортування</h3>
+    <p>Кнопки вгорі списку дозволяють змінити порядок:</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">📷</div>
+        <h4>За кількістю фото</h4>
+        <p>Найбільш часто зустрічані люди — вгорі.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">А-Я</div>
+        <h4>За алфавітом</h4>
+        <p>Підписані люди в алфавітному порядку, без імені — в кінці.</p>
+      </div>
+    </div>
+
+    <h3>Обрані ⭐</h3>
+    <p>Натисніть зірочку на картці людини щоб додати її в обрані — вона завжди буде вгорі списку. Обраних можна <strong>перетягувати</strong> для зміни порядку.</p>
+
+    <h3>Дії з людиною</h3>
+    <p>Наведіть мишу на картку — з'являться кнопки:</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">🔗</div>
+        <h4>Злити</h4>
+        <p>Якщо одна людина потрапила в дві різні групи — об'єднайте їх.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">✕</div>
+        <h4>Видалити</h4>
+        <p>Видалити групу (фото залишаються на диску, тільки група видаляється).</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Галерея -->
+  <section id="gallery">
+    <h2>🖼 Галерея фото</h2>
+    <p>Клікніть на будь-яку людину зліва — відкриється галерея всіх її фото, відсортованих від найновіших до найстаріших.</p>
+
+    <h3>Навігація по роках</h3>
+    <p>Справа є <strong>шкала часу</strong> з роками — клікніть на будь-який рік щоб одразу перейти до нього. Або прокручуйте вниз — старіші роки підвантажуються автоматично.</p>
+
+    <h3>Дії з фото</h3>
+    <p>Наведіть мишу на фото — з'являться кнопки:</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">📂</div>
+        <h4>Відкрити в папці</h4>
+        <p>Відкриває папку де знаходиться фото.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">✕</div>
+        <h4>Прибрати з групи</h4>
+        <p>Якщо фото потрапило в групу помилково — прибирає його звідти.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">⭐</div>
+        <h4>Обкладинка</h4>
+        <p>Встановлює це фото як аватар людини в списку.</p>
+      </div>
+    </div>
+
+    <h3>Вибір кількох фото</h3>
+    <p>Наведіть на фото — з'явиться чекбокс. Натисніть його щоб вибрати фото. Для вибору діапазону — оберіть перше фото, потім <kbd>Shift</kbd> + клік на останньому.</p>
+    <p>Коли обрано кілька фото — внизу з'являється панель з діями:</p>
+    <div class="cards">
+      <div class="card">
+        <div class="card-icon">➕</div>
+        <h4>Нова людина</h4>
+        <p>Перемістити вибрані фото в нову окрему групу.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">👤</div>
+        <h4>До існуючої</h4>
+        <p>Перемістити вибрані фото до іншої людини зі списку.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🗑</div>
+        <h4>Прибрати з групи</h4>
+        <p>Прибрати всі вибрані фото з поточної групи одразу.</p>
+      </div>
+    </div>
+    <div class="tip"><strong>Підказка:</strong> Щоб скасувати вибір — клікніть на порожнє місце в галереї або натисніть "Скасувати" в панелі внизу.</div>
+  </section>
+
+  <!-- Пошук -->
+  <section id="search">
+    <h2>🔍 Пошук</h2>
+
+    <h3>Пошук за іменем</h3>
+    <p>Поле пошуку над списком людей — просто почніть вводити ім'я. Пошук працює з будь-якого регістру (велика чи мала літера — не важливо). Кнопка <strong>✕</strong> очищає пошук.</p>
+
+    <h3>Пошук за фото</h3>
+    <p>Якщо у вас є фото людини але ви не знаєте чи є вона в архіві — скористайтесь пошуком за фото:</p>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-content">
+          <h4>Киньте фото в зону пошуку</h4>
+          <p>Перетягніть будь-яке фото в область "Кинь або обери фото людини" — або клікніть на неї щоб вибрати файл.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-content">
+          <h4>Дочекайтесь результату</h4>
+          <p>Програма порівняє обличчя з фото з усіма людьми в архіві.</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-content">
+          <h4>Оберіть людину</h4>
+          <p>У списку з'являться найбільш схожі люди з відсотком збігу. Клікніть на потрібну.</p>
+        </div>
+      </div>
+    </div>
+    <div class="tip"><strong>Підказка:</strong> Натисніть <strong>✕ очистити</strong> після пошуку щоб повернути звичайний список.</div>
+  </section>
+
+  <!-- Перегляд фото -->
+  <section id="viewer">
+    <h2>🎬 Перегляд фото</h2>
+    <p>Клікніть на будь-яке фото в галереї — відкриється повноекранний переглядач.</p>
+
+    <h3>Навігація</h3>
+    <table class="shortcuts">
+      <tr><th>Дія</th><th>Як зробити</th></tr>
+      <tr><td>Наступне фото</td><td><kbd>→</kbd> або кнопка ›</td></tr>
+      <tr><td>Попереднє фото</td><td><kbd>←</kbd> або кнопка ‹</td></tr>
+      <tr><td>Закрити</td><td><kbd>Esc</kbd> або клік поза фото або кнопка ✕</td></tr>
+    </table>
+
+    <h3>Збільшення</h3>
+    <table class="shortcuts">
+      <tr><th>Дія</th><th>Як зробити</th></tr>
+      <tr><td>Збільшити / зменшити</td><td>Колесо миші</td></tr>
+      <tr><td>Збільшити в точку</td><td>Подвійний клік</td></tr>
+      <tr><td>Скинути збільшення</td><td>Подвійний клік ще раз</td></tr>
+      <tr><td>Перетягнути збільшене фото</td><td>Утримуй і тягни мишею</td></tr>
+    </table>
+
+    <h3>Слайдшоу</h3>
+    <p>Натисніть <strong>▶</strong> або <kbd>Пробіл</kbd> щоб запустити автоматичний перегляд. Фото змінюються кожні 3 секунди. Повторно натисніть щоб зупинити.</p>
+  </section>
+
+  <!-- Поради -->
+  <section id="tips">
+    <h2>💡 Корисні поради</h2>
+
+    <div class="tip"><strong>Дві людини в одній групі?</strong> Виберіть "чужі" фото чекбоксами → "Нова людина" або "До існуючої".</div>
+    <div class="tip"><strong>Одна людина в двох групах?</strong> Натисніть 🔗 на картці в списку і оберіть з якою групою злити.</div>
+    <div class="tip"><strong>Хочете швидко знайти людину?</strong> Додайте її в обрані ⭐ — вона завжди буде вгорі списку.</div>
+    <div class="tip"><strong>Додали нові фото?</strong> Просто натисніть "Індексувати" ще раз — вже проіндексовані фото пропускаються, додадуться тільки нові.</div>
+    <div class="tip"><strong>Програма не запускається?</strong> Спробуйте запустити <strong>start.bat</strong> — у вікні буде видно де саме помилка.</div>
+    <div class="tip"><strong>Фото займає весь екран?</strong> Натисніть подвійний клік або <kbd>Esc</kbd> щоб повернутись до нормального розміру.</div>
+  </section>
+
+</div>
+
+<footer>
+  <p>FaceLib — розроблено з ❤️ для сімейних фотоархівів</p>
+  <p style="margin-top:8px"><a href="https://github.com/Sandro-it/facelib">GitHub</a></p>
+</footer>
+
+</body>
+</html>
