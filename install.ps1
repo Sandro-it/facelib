@@ -30,9 +30,10 @@ try {
 # Step 2 - Virtual environment
 Write-Host ""
 Write-Host "  [2/4] Creating virtual environment..." -ForegroundColor Yellow
-if (-not (Test-Path "$DIR\.venv")) {
-    python -m venv "$DIR\.venv" | Out-Null
+if (Test-Path "$DIR\.venv") {
+    Remove-Item "$DIR\.venv" -Recurse -Force | Out-Null
 }
+python -m venv "$DIR\.venv" | Out-Null
 Write-Host "  OK: Done" -ForegroundColor Green
 
 # Step 3 - Dependencies
@@ -47,7 +48,7 @@ foreach ($pkg in $packages) {
     $i++
     $pct = [int]($i / $packages.Count * 100)
     Write-Progress -Activity "Installing packages" -Status "$pkg ($i/$($packages.Count))" -PercentComplete $pct
-    & "$DIR\.venv\Scripts\pip.exe" install $pkg -q 2>&1 | Out-Null
+    & "$DIR\.venv\Scripts\python.exe" -m pip install $pkg -q 2>&1 | Out-Null
 }
 Write-Progress -Activity "Installing packages" -Completed
 Write-Host "  OK: All packages installed" -ForegroundColor Green
