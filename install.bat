@@ -56,27 +56,15 @@ pip install fastapi uvicorn insightface onnxruntime pillow numpy python-multipar
 echo.
 echo [4/4] Creating desktop shortcut...
 set "DESKTOP=%USERPROFILE%\Desktop"
+set "SHORTCUT=%DESKTOP%\FaceLib.lnk"
 set "VBS_PATH=%FACELIB_DIR%\start.vbs"
 set "ICON_PATH=%FACELIB_DIR%\facelib.ico"
-set "SHORTCUT=%DESKTOP%\FaceLib.lnk"
 
-:: Створюємо ярлик через VBS скрипт
-set "TMPVBS=%TEMP%\make_shortcut.vbs"
-echo Set ws = CreateObject("WScript.Shell") > "%TMPVBS%"
-echo Set s = ws.CreateShortcut("%SHORTCUT%") >> "%TMPVBS%"
-echo s.TargetPath = "wscript.exe" >> "%TMPVBS%"
-echo s.Arguments = Chr(34) ^& "%VBS_PATH%" ^& Chr(34) >> "%TMPVBS%"
-echo s.IconLocation = "%ICON_PATH%" >> "%TMPVBS%"
-echo s.Description = "FaceLib" >> "%TMPVBS%"
-echo s.WorkingDirectory = "%FACELIB_DIR%" >> "%TMPVBS%"
-echo s.Save >> "%TMPVBS%"
-cscript //nologo "%TMPVBS%"
-del "%TMPVBS%"
-echo Shortcut created
+powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = 'wscript.exe'; $s.Arguments = '\"%VBS_PATH%\"'; $s.IconLocation = '%ICON_PATH%'; $s.Description = 'FaceLib'; $s.WorkingDirectory = '%FACELIB_DIR%'; $s.Save(); Write-Host 'Shortcut created'"
 
 echo.
 echo ========================================
 echo   Done! FaceLib shortcut on your Desktop
 echo   Double-click it to start
 echo ========================================
-timeout /t 3 /nobreak >nul
+pause
