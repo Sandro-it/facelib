@@ -9,13 +9,33 @@ echo   FaceLib - Installation
 echo ========================================
 echo.
 
+:: Перевіряємо Python
 python --version >nul 2>&1
 if errorlevel 1 (
-    echo [ERROR] Python not found!
-    echo Download Python 3.10+ from https://python.org
-    echo Check "Add to PATH" during installation
-    pause
-    exit /b 1
+    echo [!] Python not found. Downloading Python 3.11...
+    echo     Please wait...
+    echo.
+    :: Скачуємо Python installer
+    powershell -NoProfile -Command "Invoke-WebRequest -Uri 'https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe' -OutFile '%TEMP%\python_installer.exe'"
+    if errorlevel 1 (
+        echo [ERROR] Failed to download Python.
+        echo Please download manually from https://python.org
+        pause
+        exit /b 1
+    )
+    echo [*] Installing Python...
+    :: Встановлюємо тихо з Add to PATH
+    "%TEMP%\python_installer.exe" /quiet InstallAllUsers=0 PrependPath=1 Include_test=0
+    if errorlevel 1 (
+        echo [ERROR] Python installation failed.
+        pause
+        exit /b 1
+    )
+    del "%TEMP%\python_installer.exe"
+    :: Оновлюємо PATH для поточної сесії
+    set "PATH=%LOCALAPPDATA%\Programs\Python\Python311;%LOCALAPPDATA%\Programs\Python\Python311\Scripts;%PATH%"
+    echo [OK] Python installed successfully
+    echo.
 )
 
 echo [1/4] Python found:
