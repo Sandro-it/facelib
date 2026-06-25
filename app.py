@@ -709,7 +709,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", response_class=HTMLResponse)
 def root():
-    return FileResponse("templates/index.html")
+    return FileResponse("index.html")
 
 if __name__ == "__main__":
     uvicorn.run("app:app", host="127.0.0.1", port=7788, reload=False)
