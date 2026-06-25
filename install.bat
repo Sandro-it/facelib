@@ -60,7 +60,16 @@ set "SHORTCUT=%DESKTOP%\FaceLib.lnk"
 set "VBS_PATH=%FACELIB_DIR%\start.vbs"
 set "ICON_PATH=%FACELIB_DIR%\facelib.ico"
 
-powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut('%SHORTCUT%'); $s.TargetPath = 'wscript.exe'; $s.Arguments = '\"%VBS_PATH%\"'; $s.IconLocation = '%ICON_PATH%'; $s.Description = 'FaceLib'; $s.WorkingDirectory = '%FACELIB_DIR%'; $s.Save(); Write-Host 'Shortcut created'"
+powershell -NoProfile -Command ^
+  "$ws = New-Object -ComObject WScript.Shell;" ^
+  "$s = $ws.CreateShortcut('%SHORTCUT%');" ^
+  "$s.TargetPath = 'wscript.exe';" ^
+  "$s.Arguments = '\""%VBS_PATH%\"\"';" ^
+  "$s.IconLocation = '%ICON_PATH%';" ^
+  "$s.Description = 'FaceLib';" ^
+  "$s.WorkingDirectory = '%FACELIB_DIR%';" ^
+  "$s.Save()"
+echo Shortcut created
 
 echo.
 echo ========================================
