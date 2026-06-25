@@ -13,7 +13,7 @@ def start_server():
     venv_python = os.path.join(dir_path, ".venv", "Scripts", "python.exe")
     python = venv_python if os.path.exists(venv_python) else sys.executable
     server_process = subprocess.Popen(
-        [python, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "7788"],
+        [python, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "7789"],
         cwd=dir_path,
         creationflags=subprocess.CREATE_NO_WINDOW
     )
@@ -23,12 +23,12 @@ def wait_and_open():
     # Чекаємо до 60 секунд
     for _ in range(120):
         try:
-            urllib.request.urlopen("http://127.0.0.1:7788/api/status", timeout=1)
-            window.load_url("http://127.0.0.1:7788")
+            urllib.request.urlopen("http://127.0.0.1:7789/api/status", timeout=1)
+            window.load_url("http://127.0.0.1:7789")
             return
         except:
             time.sleep(0.5)
-    window.load_url("http://127.0.0.1:7788")
+    window.load_url("http://127.0.0.1:7789")
 
 LOADING_HTML = """
 <!DOCTYPE html>
