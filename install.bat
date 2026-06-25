@@ -30,7 +30,7 @@ if not exist "%FACELIB_DIR%\.venv" (
 echo.
 echo [3/4] Installing dependencies (may take a few minutes)...
 call "%FACELIB_DIR%\.venv\Scripts\activate.bat"
-pip install --upgrade pip -q
+python -m pip install --upgrade pip -q 2>nul
 pip install fastapi uvicorn insightface onnxruntime pillow numpy python-multipart -q
 
 echo.
