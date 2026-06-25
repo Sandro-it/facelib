@@ -67,4 +67,4 @@ echo ========================================
 echo   Done! FaceLib shortcut on your Desktop
 echo   Double-click it to start
 echo ========================================
-pause
+timeout /t 3 /nobreak >nul
