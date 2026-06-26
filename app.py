@@ -14,6 +14,9 @@ import uvicorn
 app = FastAPI(title="FaceLib")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+VERSION = "1.1"
+GITHUB_REPO = "Sandro-it/facelib"
+
 DB_PATH = "facelib.db"
 THUMBS_DIR = Path("static/thumbs")
 THUMBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -706,6 +709,76 @@ def browse_folder():
     return {"ok": False, "path": ""}
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/api/version")
+def get_version():
+    return {"version": VERSION}
+
+@app.get("/api/check-update")
+async def check_update():
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            headers={"User-Agent": "FaceLib"}
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+            latest = data["tag_name"].lstrip("v")
+            return {
+                "current": VERSION,
+                "latest": latest,
+                "has_update": latest != VERSION,
+                "tag": data["tag_name"],
+                "name": data["name"]
+            }
+    except Exception as e:
+        return {"error": str(e), "current": VERSION}
+
+@app.post("/api/update")
+async def do_update():
+    import urllib.request, zipfile, shutil, tempfile
+    try:
+        req = urllib.request.Request(
+            f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
+            headers={"User-Agent": "FaceLib"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as r:
+            data = json.loads(r.read())
+        zip_url = f"https://github.com/{GITHUB_REPO}/archive/refs/tags/{data['tag_name']}.zip"
+        app_dir = Path(__file__).parent
+        backup_dir = app_dir / "backup"
+        backup_dir.mkdir(exist_ok=True)
+        for f in ["app.py", "index.html"]:
+            src = app_dir / f
+            if src.exists():
+                shutil.copy2(src, backup_dir / f)
+        with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as tmp:
+            tmp_path = tmp.name
+        urllib.request.urlretrieve(zip_url, tmp_path)
+        with zipfile.ZipFile(tmp_path) as z:
+            for member in z.namelist():
+                filename = Path(member).name
+                if filename in ["app.py", "index.html"]:
+                    with z.open(member) as src, open(app_dir / filename, "wb") as dst:
+                        dst.write(src.read())
+        Path(tmp_path).unlink()
+        return {"ok": True}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+@app.post("/api/rollback")
+async def do_rollback():
+    import shutil
+    app_dir = Path(__file__).parent
+    backup_dir = app_dir / "backup"
+    if not backup_dir.exists():
+        return {"ok": False, "error": "No backup found"}
+    for f in ["app.py", "index.html"]:
+        src = backup_dir / f
+        if src.exists():
+            shutil.copy2(src, app_dir / f)
+    return {"ok": True}
 
 @app.get("/", response_class=HTMLResponse)
 def root():
