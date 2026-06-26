@@ -285,15 +285,11 @@ def run_indexer():
             indexer_state["current_file"] = os.path.basename(fpath)
 
             try:
-                pil_img = Image.open(fpath).convert("RGB")
-                img = np.array(pil_img)[:, :, ::-1].copy()
-                faces = fa.get(img)
-
-                # Читаємо дату з EXIF
+                pil_img = Image.open(fpath)
+                # Читаємо EXIF до convert
                 taken_at = None
                 try:
-                    raw = Image.open(fpath)
-                    exif = raw._getexif() if hasattr(raw, '_getexif') else None
+                    exif = pil_img._getexif() if hasattr(pil_img, '_getexif') else None
                     if exif:
                         import datetime
                         dt_str = exif.get(36867) or exif.get(306)
@@ -307,6 +303,10 @@ def run_indexer():
                         taken_at = os.path.getmtime(fpath)
                     except:
                         pass
+
+                pil_img = pil_img.convert("RGB")
+                img = np.array(pil_img)[:, :, ::-1].copy()
+                faces = fa.get(img)
 
                 with db:
                     cur = db.execute("INSERT OR IGNORE INTO photos(path, indexed_at, taken_at) VALUES(?,?,?)",
