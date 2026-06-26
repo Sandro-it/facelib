@@ -7,8 +7,8 @@ if not exist ".venv" (
 )
 
 call .venv\Scripts\activate.bat
-echo Server starting at http://127.0.0.1:7789
+echo Server starting at http://127.0.0.1:7788
 echo Press Ctrl+C to stop
 echo.
-uvicorn app:app --host 127.0.0.1 --port 7789
+uvicorn app:app --host 127.0.0.1 --port 7788
 pause
