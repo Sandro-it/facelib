@@ -14,7 +14,7 @@ import uvicorn
 app = FastAPI(title="FaceLib")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-VERSION = "1.0"
+VERSION = "1.1"
 GITHUB_REPO = "Sandro-it/facelib"
 
 DB_PATH = "facelib.db"
