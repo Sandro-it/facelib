@@ -1608,8 +1608,9 @@ async function checkAndUpdate() {
 
 initVersion();
 loadFolders();
-loadPersons(null);
 fetchStatus();
+// Затримка для десктопної версії
+setTimeout(function(){ loadPersons(null); }, 2000);
 setInterval(fetchStatus, 2000);
 setInterval(function(){
   var dot = document.getElementById('statusDot');
