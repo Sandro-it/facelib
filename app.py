@@ -329,6 +329,46 @@ def run_indexer():
             cluster_faces()
             indexer_state["clustering"] = False
 
+        # Оновлюємо дати з EXIF після індексації
+        indexer_state["current_file"] = "updating dates..."
+        try:
+            import datetime as _dt
+            from PIL.ExifTags import TAGS as _TAGS
+            db2 = get_db()
+            rows = db2.execute("SELECT id, path FROM photos WHERE taken_at IS NULL").fetchall()
+            batch = []
+            for photo_id, path in rows:
+                taken_at = None
+                try:
+                    from PIL import Image as _Img
+                    img = _Img.open(path)
+                    exif = img._getexif() if hasattr(img, '_getexif') else None
+                    if exif:
+                        for tag_id, val in exif.items():
+                            tag = _TAGS.get(tag_id, tag_id)
+                            if tag in ("DateTimeOriginal", "DateTime", "DateTimeDigitized"):
+                                dt = _dt.datetime.strptime(val, "%Y:%m:%d %H:%M:%S")
+                                taken_at = dt.timestamp()
+                                break
+                    img.close()
+                except:
+                    pass
+                if not taken_at:
+                    try:
+                        taken_at = os.path.getmtime(path)
+                    except:
+                        pass
+                batch.append((taken_at, photo_id))
+                if len(batch) >= 500:
+                    with db2:
+                        db2.executemany("UPDATE photos SET taken_at=? WHERE id=?", batch)
+                    batch = []
+            if batch:
+                with db2:
+                    db2.executemany("UPDATE photos SET taken_at=? WHERE id=?", batch)
+        except:
+            pass
+
     finally:
         indexer_state["running"] = False
         indexer_state["clustering"] = False
