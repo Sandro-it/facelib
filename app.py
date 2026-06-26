@@ -289,36 +289,18 @@ def run_indexer():
                 img = np.array(pil_img)[:, :, ::-1].copy()
                 faces = fa.get(img)
 
-                # Читаємо дату з EXIF окремо
+                # Дата файлу
                 taken_at = None
                 try:
-                    from PIL import Image as _Img
-                    _tmp = _Img.open(fpath)
-                    exif = _tmp._getexif() if hasattr(_tmp, '_getexif') else None
-                    if exif:
-                        import datetime
-                        dt_str = exif.get(36867) or exif.get(306)
-                        if dt_str:
-                            dt = datetime.datetime.strptime(dt_str, "%Y:%m:%d %H:%M:%S")
-                            taken_at = dt.timestamp()
-                    _tmp.close()
+                    taken_at = os.path.getmtime(fpath)
                 except:
                     pass
-                if not taken_at:
-                    try:
-                        taken_at = os.path.getmtime(fpath)
-                    except:
-                        pass
 
                 with db:
                     cur = db.execute("INSERT OR IGNORE INTO photos(path, indexed_at, taken_at) VALUES(?,?,?)",
                                      (fpath, time.time(), taken_at))
                     photo_id = cur.lastrowid or db.execute(
                         "SELECT id FROM photos WHERE path=?", (fpath,)).fetchone()[0]
-                    if taken_at:
-                        db.execute("UPDATE photos SET taken_at=? WHERE id=? AND taken_at IS NULL",
-                                   (taken_at, photo_id))
-
                     for fi, face in enumerate(faces):
                         emb = face.embedding.astype(np.float32).tobytes()
                         bbox = json.dumps(face.bbox.tolist())
