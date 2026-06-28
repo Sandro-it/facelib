@@ -484,7 +484,8 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
                 "is_favorite": bool(r["is_favorite"]), "sort_order": r["sort_order"],
             })
         return result
-    except Exception:
+    except Exception as e:
+        import traceback; traceback.print_exc()
         return []
 
 @app.get("/api/persons/count")
