@@ -130,7 +130,8 @@
 
   /* Timeline */
   .gallery-wrap{flex:1;display:flex;overflow:hidden}
-  .timeline{width:48px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:2px;overflow:hidden}
+  .timeline{width:48px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:0;overflow:hidden;justify-content:space-between;position:relative}
+  .timeline-indicator{position:absolute;right:0;width:48px;height:2px;background:var(--accent);pointer-events:none;transition:top .1s;opacity:0.8}
   .timeline-year{font-size:9px;color:var(--text-dim);cursor:pointer;padding:3px 4px;border-radius:4px;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);transition:all .15s;text-align:center;line-height:1}
   .timeline-year:hover,.timeline-year.active{color:var(--accent);background:var(--surface2)}
 
@@ -866,6 +867,8 @@ async function openPerson(p) {
     if (selectedPhotoIds.size > 0 && !e.target.closest('.photo-card')) clearSelection();
   });
   var timeline = document.createElement('div'); timeline.className = 'timeline'; timeline.id = 'photoTimeline';
+  var timelineIndicator = document.createElement('div'); timelineIndicator.className = 'timeline-indicator'; timelineIndicator.id = 'timelineIndicator';
+  timeline.appendChild(timelineIndicator);
 
   // Панель вибору фото
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
@@ -1033,6 +1036,14 @@ async function openPerson(p) {
           currentAbort = new AbortController();
           loadYear(allYearsOriginal[bottomYearIdx], currentAbort.signal);
         }
+      }
+      // Оновлюємо індикатор позиції на шкалі
+      var indicator = document.getElementById('timelineIndicator');
+      var tl = document.getElementById('photoTimeline');
+      if (indicator && tl && grid.scrollHeight > grid.clientHeight) {
+        var pct = grid.scrollTop / (grid.scrollHeight - grid.clientHeight);
+        indicator.style.top = (pct * (tl.clientHeight - 2)) + 'px';
+        indicator.style.position = 'absolute';
       }
     };
     grid.addEventListener('scroll', window._photoScrollFn);
@@ -1608,9 +1619,8 @@ async function checkAndUpdate() {
 
 initVersion();
 loadFolders();
+loadPersons(null);
 fetchStatus();
-// Затримка для десктопної версії
-setTimeout(function(){ loadPersons(null); }, 2000);
 setInterval(fetchStatus, 2000);
 setInterval(function(){
   var dot = document.getElementById('statusDot');
