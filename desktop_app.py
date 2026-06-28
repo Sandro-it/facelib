@@ -53,9 +53,6 @@ LOADING_HTML = """
 if __name__ == "__main__":
     threading.Thread(target=start_server, daemon=True).start()
 
-    dir_path = os.path.dirname(os.path.abspath(__file__))
-    icon_path = os.path.join(dir_path, "facelib.ico")
-
     window = webview.create_window(
         "FaceLib",
         html=LOADING_HTML,
@@ -67,14 +64,6 @@ if __name__ == "__main__":
     threading.Thread(target=wait_and_open, daemon=True).start()
 
     webview.start()
-
-    # Встановлюємо іконку через Windows API
-    if sys.platform == "win32" and os.path.exists(icon_path):
-        try:
-            import ctypes
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FaceLib")
-        except:
-            pass
 
     if server_process:
         server_process.terminate()
