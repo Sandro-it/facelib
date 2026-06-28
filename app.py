@@ -442,6 +442,14 @@ async def toggle_folder(folder_id: int, data: dict):
 def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str = "count"):
     try:
         db = get_db()
+        # Міграція на випадок якщо стовпці відсутні
+        cols = [r[1] for r in db.execute("PRAGMA table_info(persons)").fetchall()]
+        if 'is_favorite' not in cols:
+            db.execute("ALTER TABLE persons ADD COLUMN is_favorite INTEGER DEFAULT 0")
+            db.commit()
+        if 'sort_order' not in cols:
+            db.execute("ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
+            db.commit()
         order_named = "LOWER(p.name) ASC" if sort == "name" else "photo_count DESC"
         search_pat = f"%{search.lower()}%" if search else None
         if search_pat:
