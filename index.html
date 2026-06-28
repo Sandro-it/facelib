@@ -131,7 +131,7 @@
   /* Timeline */
   .gallery-wrap{flex:1;display:flex;overflow:hidden}
   .timeline{width:48px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:0;overflow:visible;justify-content:space-between;position:relative}
-  .timeline-indicator{position:fixed;right:0;width:6px;height:20px;background:var(--accent);pointer-events:none;transition:top .15s;border-radius:3px 0 0 3px;box-shadow:-2px 0 8px var(--accent);opacity:1;z-index:999}
+  .timeline-indicator{position:absolute;left:0;right:0;height:3px;background:var(--accent);pointer-events:none;transition:top .2s;border-radius:2px;box-shadow:0 0 8px var(--accent),0 0 3px var(--accent);opacity:1;z-index:10}
   .timeline-year{font-size:9px;color:var(--text-dim);cursor:pointer;padding:3px 4px;border-radius:4px;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);transition:all .15s;text-align:center;line-height:1}
   .timeline-year:hover,.timeline-year.active{color:var(--accent);background:var(--surface2)}
 
@@ -1330,9 +1330,8 @@ function updateTimelineIndicator() {
   // Переміщуємо індикатор до відповідного елемента шкали
   var activeEl = tl.querySelector('.timeline-year[data-year="' + currentYear + '"]');
   if (activeEl) {
-    var elRect = activeEl.getBoundingClientRect();
-    var centerY = elRect.top + elRect.height / 2 - 10;
-    indicator.style.top = centerY + 'px';
+    var topPos = activeEl.offsetTop + activeEl.offsetHeight / 2 - 1;
+    indicator.style.top = topPos + 'px';
   }
 }
 
@@ -1660,7 +1659,7 @@ setInterval(function(){
   if (dot && dot.classList.contains('active')) loadPersons(null);
 }, 30000);
 </script>
-<div id="debugIndicator" style="position:fixed;left:10px;top:10px;width:30px;height:30px;background:red;z-index:9999;border-radius:50%"></div>
+
 </body>
 </html>
 
