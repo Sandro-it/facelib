@@ -66,7 +66,15 @@ if __name__ == "__main__":
 
     threading.Thread(target=wait_and_open, daemon=True).start()
 
-    webview.start(icon=icon_path if os.path.exists(icon_path) else None)
+    webview.start()
+
+    # Встановлюємо іконку через Windows API
+    if sys.platform == "win32" and os.path.exists(icon_path):
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("FaceLib")
+        except:
+            pass
 
     if server_process:
         server_process.terminate()
