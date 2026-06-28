@@ -869,6 +869,10 @@ async function openPerson(p) {
   var timeline = document.createElement('div'); timeline.className = 'timeline'; timeline.id = 'photoTimeline';
   var timelineIndicator = document.createElement('div'); timelineIndicator.className = 'timeline-indicator'; timelineIndicator.id = 'timelineIndicator';
   timeline.appendChild(timelineIndicator);
+  var dbg = document.createElement('div');
+  dbg.style.cssText = 'color:red;font-size:10px;font-weight:bold;text-align:center;padding:2px';
+  dbg.textContent = 'OK';
+  timeline.appendChild(dbg);
 
   // Панель вибору фото
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
