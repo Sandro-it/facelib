@@ -603,7 +603,7 @@ var personsAllLoaded = false;
 var personsSearchQuery = '';
 var personsLoading = false;
 
-async function loadPersons(highlightIds) {
+async function loadPersons(highlightIds, _retryCount) {
   personsOffset = 0;
   personsAllLoaded = false;
   personsLoading = false;
@@ -612,9 +612,15 @@ async function loadPersons(highlightIds) {
   // Get count
   var countR = await fetch('/api/persons/count?search=' + encodeURIComponent(personsSearchQuery));
   var countD = await countR.json();
-  document.getElementById('personCount').textContent = countD.count.toLocaleString();
+  var total = countD.count;
+  document.getElementById('personCount').textContent = total.toLocaleString();
   list.innerHTML = '';
   await loadMorePersons(highlightIds);
+  // Якщо є люди в БД але список порожній — повторити (сервер ще ініціалізується)
+  var retry = _retryCount || 0;
+  if (total > 0 && list.children.length === 0 && retry < 5) {
+    setTimeout(function() { loadPersons(highlightIds, retry + 1); }, 2000);
+  }
 }
 
 async function loadMorePersons(highlightIds) {
