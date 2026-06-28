@@ -24,7 +24,7 @@ def wait_and_open():
     for _ in range(120):
         try:
             urllib.request.urlopen("http://127.0.0.1:7789/api/status", timeout=1)
-            time.sleep(1.5)  # додаткова пауза щоб БД встигла ініціалізуватись
+            time.sleep(3.0)  # додаткова пауза щоб БД встигла ініціалізуватись
             window.load_url("http://127.0.0.1:7789")
             return
         except:
