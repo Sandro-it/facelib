@@ -1661,18 +1661,12 @@ initVersion();
 loadFolders();
 fetchStatus();
 setInterval(fetchStatus, 2000);
-// Повторювати loadPersons поки йде індексація і список порожній
+// Повторювати loadPersons поки список порожній
 (async function initialLoad() {
   for (var i = 0; i < 60; i++) {
     await loadPersons(null);
     var list = document.getElementById('personList');
     if (list && list.querySelector('.person-card')) break;
-    // Перевіряємо чи іде індексація
-    try {
-      var sr = await fetch('/api/status');
-      var ss = await sr.json();
-      if (!ss.running) break; // індексація зупинилась — більше не пробуємо
-    } catch(e) {}
     await new Promise(function(r){ setTimeout(r, 3000); });
   }
 })();
