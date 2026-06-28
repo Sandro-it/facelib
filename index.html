@@ -1659,9 +1659,17 @@ async function checkAndUpdate() {
 
 initVersion();
 loadFolders();
-loadPersons(null);
 fetchStatus();
 setInterval(fetchStatus, 2000);
+// Повторювати loadPersons поки не з'явиться список (сервер може ще ініціалізуватись)
+(async function initialLoad() {
+  for (var i = 0; i < 10; i++) {
+    await loadPersons(null);
+    var list = document.getElementById('personList');
+    if (list && list.querySelector('.person-card')) break;
+    await new Promise(function(r){ setTimeout(r, 2000); });
+  }
+})();
 setInterval(function(){
   var dot = document.getElementById('statusDot');
   if (dot && dot.classList.contains('active')) loadPersons(null);
