@@ -869,10 +869,6 @@ async function openPerson(p) {
   var timeline = document.createElement('div'); timeline.className = 'timeline'; timeline.id = 'photoTimeline';
   var timelineIndicator = document.createElement('div'); timelineIndicator.className = 'timeline-indicator'; timelineIndicator.id = 'timelineIndicator';
   timeline.appendChild(timelineIndicator);
-  var dbg = document.createElement('div');
-  dbg.style.cssText = 'color:red;font-size:10px;font-weight:bold;text-align:center;padding:2px';
-  dbg.textContent = 'OK';
-  timeline.appendChild(dbg);
 
   // Панель вибору фото
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
@@ -1343,6 +1339,14 @@ function updateTimeline(years) {
   var tl = document.getElementById('photoTimeline');
   if (!tl) return;
   tl.innerHTML = '';
+  // Відновлюємо індикатор після очищення
+  var indicator = document.getElementById('timelineIndicator');
+  if (!indicator) {
+    indicator = document.createElement('div');
+    indicator.className = 'timeline-indicator';
+    indicator.id = 'timelineIndicator';
+  }
+  tl.appendChild(indicator);
   var unique = [];
   years.forEach(function(y) { if (y && unique.indexOf(y) === -1) unique.push(y); });
   unique.sort(function(a,b){ return b-a; });
