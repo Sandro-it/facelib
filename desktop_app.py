@@ -20,11 +20,10 @@ def start_server():
 
 def wait_and_open():
     import urllib.request
-    # Чекаємо до 60 секунд
-    for _ in range(120):
+    # Чекаємо до 120 секунд поки сервер і БД повністю готові
+    for _ in range(240):
         try:
-            urllib.request.urlopen("http://127.0.0.1:7789/api/status", timeout=1)
-            time.sleep(3.0)  # додаткова пауза щоб БД встигла ініціалізуватись
+            urllib.request.urlopen("http://127.0.0.1:7789/api/persons/count", timeout=1)
             window.load_url("http://127.0.0.1:7789")
             return
         except:
