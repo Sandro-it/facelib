@@ -131,7 +131,7 @@
   /* Timeline */
   .gallery-wrap{flex:1;display:flex;overflow:hidden}
   .timeline{width:48px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:0;overflow:hidden;justify-content:space-between;position:relative}
-  .timeline-indicator{position:absolute;right:0;width:48px;height:2px;background:var(--accent);pointer-events:none;transition:top .1s;opacity:0.8}
+  .timeline-indicator{position:absolute;left:0;width:4px;height:18px;background:var(--accent);pointer-events:none;transition:top .15s;border-radius:0 3px 3px 0;box-shadow:0 0 6px var(--accent);opacity:0}
   .timeline-year{font-size:9px;color:var(--text-dim);cursor:pointer;padding:3px 4px;border-radius:4px;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);transition:all .15s;text-align:center;line-height:1}
   .timeline-year:hover,.timeline-year.active{color:var(--accent);background:var(--surface2)}
 
@@ -1332,7 +1332,7 @@ function updateTimelineIndicator() {
   if (activeEl) {
     var tlRect = tl.getBoundingClientRect();
     var elRect = activeEl.getBoundingClientRect();
-    var relTop = elRect.top - tlRect.top + elRect.height / 2 - 1;
+    var relTop = elRect.top - tlRect.top + (elRect.height / 2) - 9;
     indicator.style.top = relTop + 'px';
     indicator.style.opacity = '1';
   }
