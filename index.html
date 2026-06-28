@@ -1037,14 +1037,8 @@ async function openPerson(p) {
           loadYear(allYearsOriginal[bottomYearIdx], currentAbort.signal);
         }
       }
-      // Оновлюємо індикатор позиції на шкалі
-      var indicator = document.getElementById('timelineIndicator');
-      var tl = document.getElementById('photoTimeline');
-      if (indicator && tl && grid.scrollHeight > grid.clientHeight) {
-        var pct = grid.scrollTop / (grid.scrollHeight - grid.clientHeight);
-        indicator.style.top = (pct * (tl.clientHeight - 2)) + 'px';
-        indicator.style.position = 'absolute';
-      }
+      // Оновлюємо індикатор позиції на шкалі — прив'язка до поточного року
+      updateTimelineIndicator();
     };
     grid.addEventListener('scroll', window._photoScrollFn);
   }
@@ -1053,6 +1047,7 @@ async function openPerson(p) {
   grid.innerHTML = '';
   currentAbort = new AbortController();
   await loadYear(allYearsOriginal[0], currentAbort.signal);
+  setTimeout(updateTimelineIndicator, 100);
 }
 
 function closeGallery() {
@@ -1304,6 +1299,45 @@ function lbStopPlay() {
 // ---------------------------------------------------------------------------
 var lastRenderedYear = null;
 
+function updateTimelineIndicator() {
+  var tl = document.getElementById('photoTimeline');
+  var indicator = document.getElementById('timelineIndicator');
+  var grid = document.getElementById('photoGrid');
+  if (!tl || !indicator || !grid) return;
+
+  // Знаходимо всі роздільники років у сітці
+  var yearDivs = grid.querySelectorAll('[id^="year-"]');
+  if (!yearDivs.length) return;
+
+  var gridTop = grid.getBoundingClientRect().top;
+  var gridMid = gridTop + grid.clientHeight * 0.3; // верхня третина viewport'у
+  var currentYear = null;
+
+  // Знаходимо рік що знаходиться найближче до верху (але ще видно)
+  yearDivs.forEach(function(div) {
+    var rect = div.getBoundingClientRect();
+    if (rect.top <= gridMid) {
+      currentYear = div.id.replace('year-', '');
+    }
+  });
+  if (!currentYear) currentYear = yearDivs[0].id.replace('year-', '');
+
+  // Підсвічуємо активний рік на шкалі
+  document.querySelectorAll('.timeline-year').forEach(function(el) {
+    el.classList.toggle('active', el.dataset.year === currentYear);
+  });
+
+  // Переміщуємо індикатор до відповідного елемента шкали
+  var activeEl = tl.querySelector('.timeline-year[data-year="' + currentYear + '"]');
+  if (activeEl) {
+    var tlRect = tl.getBoundingClientRect();
+    var elRect = activeEl.getBoundingClientRect();
+    var relTop = elRect.top - tlRect.top + elRect.height / 2 - 1;
+    indicator.style.top = relTop + 'px';
+    indicator.style.opacity = '1';
+  }
+}
+
 function updateTimeline(years) {
   var tl = document.getElementById('photoTimeline');
   if (!tl) return;
@@ -1345,6 +1379,7 @@ function updateTimeline(years) {
         setTimeout(function() {
           var m = document.getElementById('year-' + y);
           if (m) m.scrollIntoView({behavior:'smooth', block:'start'});
+          setTimeout(updateTimelineIndicator, 150);
         }, 50);
       }
     };
@@ -1629,3 +1664,4 @@ setInterval(function(){
 </script>
 </body>
 </html>
+
