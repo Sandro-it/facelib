@@ -77,10 +77,8 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_faces_photo ON faces(photo_id);
         CREATE INDEX IF NOT EXISTS idx_faces_person_photo ON faces(person_id, photo_id);
         CREATE INDEX IF NOT EXISTS idx_persons_name ON persons(name);
-        """)
+        """
         count = conn.execute("SELECT COUNT(*) FROM scan_folders").fetchone()[0]
-        if count == 0:
-            conn.execute("INSERT OR IGNORE INTO scan_folders(path, enabled) VALUES(?, 1)", (r"G:\Photo",))
 
 # Ensure indexes exist (for existing databases)
 def ensure_indexes():
