@@ -440,49 +440,52 @@ async def toggle_folder(folder_id: int, data: dict):
 # Persons API
 @app.get("/api/persons")
 def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str = "count"):
-    db = get_db()
-    order_named = "LOWER(p.name) ASC" if sort == "name" else "photo_count DESC"
-    search_pat = f"%{search.lower()}%" if search else None
-    if search_pat:
-        rows = db.execute(f"""
-            SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-                   (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
-            FROM persons p
-            WHERE LOWER(p.name) LIKE ?
-            ORDER BY p.is_favorite DESC, p.sort_order ASC,
-                     CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
-                     {order_named}
-            LIMIT ? OFFSET ?
-        """, (search_pat, limit, offset)).fetchall()
-    else:
-        rows = db.execute(f"""
-            SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-                   (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
-            FROM persons p
-            ORDER BY p.is_favorite DESC, p.sort_order ASC,
-                     CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
-                     {order_named}
-            LIMIT ? OFFSET ?
-        """, (limit, offset)).fetchall()
-    result = []
-    for r in rows:
-        cover_url = None
-        if r["cover_face_id"]:
-            thumb_path = THUMBS_DIR / f"face_{r['cover_face_id']}.jpg"
-            if thumb_path.exists():
-                cover_url = f"/static/thumbs/face_{r['cover_face_id']}.jpg"
-            else:
-                face = db.execute("SELECT id, photo_id, bbox FROM faces WHERE id=?", (r["cover_face_id"],)).fetchone()
-                if face:
-                    photo = db.execute("SELECT path FROM photos WHERE id=?", (face["photo_id"],)).fetchone()
-                    if photo:
-                        cover_url = make_thumb(photo["path"], face["id"], face["bbox"])
-        result.append({
-            "id": r["id"], "name": r["name"],
-            "photo_count": r["photo_count"], "cover_url": cover_url,
-            "is_favorite": bool(r["is_favorite"]), "sort_order": r["sort_order"],
-        })
-    return result
+    try:
+        db = get_db()
+        order_named = "LOWER(p.name) ASC" if sort == "name" else "photo_count DESC"
+        search_pat = f"%{search.lower()}%" if search else None
+        if search_pat:
+            rows = db.execute(f"""
+                SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
+                       (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
+                FROM persons p
+                WHERE LOWER(p.name) LIKE ?
+                ORDER BY p.is_favorite DESC, p.sort_order ASC,
+                         CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
+                         {order_named}
+                LIMIT ? OFFSET ?
+            """, (search_pat, limit, offset)).fetchall()
+        else:
+            rows = db.execute(f"""
+                SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
+                       (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
+                FROM persons p
+                ORDER BY p.is_favorite DESC, p.sort_order ASC,
+                         CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
+                         {order_named}
+                LIMIT ? OFFSET ?
+            """, (limit, offset)).fetchall()
+        result = []
+        for r in rows:
+            cover_url = None
+            if r["cover_face_id"]:
+                thumb_path = THUMBS_DIR / f"face_{r['cover_face_id']}.jpg"
+                if thumb_path.exists():
+                    cover_url = f"/static/thumbs/face_{r['cover_face_id']}.jpg"
+                else:
+                    face = db.execute("SELECT id, photo_id, bbox FROM faces WHERE id=?", (r["cover_face_id"],)).fetchone()
+                    if face:
+                        photo = db.execute("SELECT path FROM photos WHERE id=?", (face["photo_id"],)).fetchone()
+                        if photo:
+                            cover_url = make_thumb(photo["path"], face["id"], face["bbox"])
+            result.append({
+                "id": r["id"], "name": r["name"],
+                "photo_count": r["photo_count"], "cover_url": cover_url,
+                "is_favorite": bool(r["is_favorite"]), "sort_order": r["sort_order"],
+            })
+        return result
+    except Exception:
+        return []
 
 @app.get("/api/persons/count")
 def persons_count(search: str = ""):
