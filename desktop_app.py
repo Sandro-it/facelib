@@ -4,8 +4,62 @@ import threading
 import time
 import sys
 import os
+import ctypes
 
 server_process = None
+
+class Api:
+    def share_files(self, paths):
+        """Викликає системний діалог Windows Share для переданих файлів."""
+        import asyncio
+        import threading
+
+        def do_share():
+            try:
+                import comtypes
+                import comtypes.client
+                from winrt.windows.storage import StorageFile
+                from winrt.windows.applicationmodel.datatransfer import DataTransferManager
+
+                # GUID для IDataTransferManagerInterop
+                DTM_INTEROP_IID = "{3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8}"
+                DTM_IID = comtypes.GUID("{A5CAEE9B-8708-49D1-8D36-67D25A8DA00C}")
+
+                # Отримуємо HWND вікна pywebview
+                hwnd = ctypes.windll.user32.GetForegroundWindow()
+
+                # Отримуємо IDataTransferManagerInterop через COM
+                clsid = comtypes.GUID("{4CE576FA-83DC-4F88-951C-9D0782B4E376}")
+                obj = comtypes.cast(
+                    comtypes.CoCreateInstance(clsid),
+                    comtypes.POINTER(comtypes.IUnknown)
+                )
+
+                loop = asyncio.new_event_loop()
+
+                async def run():
+                    files = []
+                    for p in paths:
+                        f = await StorageFile.get_file_from_path_async(p)
+                        files.append(f)
+
+                    dtm = DataTransferManager.get_for_current_view()
+
+                    def on_data_requested(sender, args):
+                        dp = args.request.data
+                        dp.properties.title = f"FaceLib — {len(files)} фото"
+                        dp.set_storage_items(files)
+
+                    dtm.add_data_requested(on_data_requested)
+                    DataTransferManager.show_share_ui()
+
+                loop.run_until_complete(run())
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+
+        threading.Thread(target=do_share, daemon=True).start()
+        return {"ok": True}
 
 def start_server():
     global server_process
@@ -53,12 +107,14 @@ LOADING_HTML = """
 if __name__ == "__main__":
     threading.Thread(target=start_server, daemon=True).start()
 
+    api = Api()
     window = webview.create_window(
         "FaceLib",
         html=LOADING_HTML,
         width=1400,
         height=900,
         min_size=(800, 600),
+        js_api=api,
     )
 
     threading.Thread(target=wait_and_open, daemon=True).start()
