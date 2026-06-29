@@ -73,23 +73,22 @@ class Api:
                 import pythoncom
                 import win32com.shell.shell as shell
                 import win32con
-                import ctypes
 
                 pythoncom.CoInitialize()
 
-                # Створюємо IDataObject з файлами
                 fgd = shell.SHCreateDataObject(None, paths, None)
-
-                # Запускаємо DoDragDrop
-                effect = ctypes.c_ulong(0)
-                shell.SHDoDragDrop(None, fgd, None,
-                    win32con.DROPEFFECT_COPY | win32con.DROPEFFECT_MOVE,
-                    ctypes.byref(effect))
+                effect = pythoncom.DROPEFFECT_COPY | pythoncom.DROPEFFECT_MOVE
+                shell.SHDoDragDrop(None, fgd, None, effect)
 
                 pythoncom.CoUninitialize()
             except Exception as e:
                 import traceback
                 traceback.print_exc()
+                try:
+                    safe_err = str(e).replace('"', '\\"').replace('\n', '\\n')
+                    window.evaluate_js(f'alert("Drag помилка:\\n{safe_err}")')
+                except:
+                    pass
 
         threading.Thread(target=do_drag, daemon=True).start()
         return {"ok": True}
