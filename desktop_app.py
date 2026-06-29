@@ -18,53 +18,30 @@ class Api:
                 import asyncio
                 import ctypes
                 import ctypes.wintypes
-                from winrt.windows.storage import StorageFile
-                from winrt.windows.applicationmodel.datatransfer import DataTransferManager
-                import comtypes
-                import comtypes.client
 
                 # Знаходимо HWND вікна FaceLib
                 hwnd = ctypes.windll.user32.FindWindowW(None, "FaceLib")
                 if not hwnd:
                     hwnd = ctypes.windll.user32.GetForegroundWindow()
 
-                # Виводимо вікно на передній план
-                ctypes.windll.user32.SetForegroundWindow(hwnd)
-                ctypes.windll.user32.BringWindowToTop(hwnd)
-                time.sleep(0.1)
-
                 loop = asyncio.new_event_loop()
 
                 async def run():
+                    from winrt.windows.storage import StorageFile
+                    from winrt.windows.applicationmodel.datatransfer import DataTransferManager
+                    from winrt.windows.applicationmodel.datatransfer._DataTransferManager import IDataTransferManagerInterop
+
                     files = []
                     for p in paths:
                         f = await StorageFile.get_file_from_path_async(p)
                         files.append(f)
 
-                    DTM_INTEROP_IID = comtypes.GUID("{3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8}")
-                    DTM_IID = comtypes.GUID("{A5CAEE9B-8708-49D1-8D36-67D25A8DA00C}")
+                    interop = IDataTransferManagerInterop._from(
+                        DataTransferManager
+                    )
 
-                    class IDataTransferManagerInterop(comtypes.IUnknown):
-                        _case_insensitive_ = True
-                        _iid_ = DTM_INTEROP_IID
-                        _methods_ = [
-                            comtypes.STDMETHOD(
-                                ctypes.HRESULT, "GetForWindow",
-                                [ctypes.wintypes.HWND, ctypes.POINTER(comtypes.GUID), ctypes.POINTER(ctypes.c_void_p)]
-                            ),
-                            comtypes.STDMETHOD(
-                                ctypes.HRESULT, "ShowShareUIForWindow",
-                                [ctypes.wintypes.HWND]
-                            ),
-                        ]
-
-                    clsid = comtypes.GUID("{4CE576FA-83DC-4F88-951C-9D0782B4E376}")
-                    interop = comtypes.CoCreateInstance(clsid, interface=IDataTransferManagerInterop, clsctx=comtypes.CLSCTX_LOCAL_SERVER)
-
-                    dtm_ptr = ctypes.c_void_p()
-                    interop.GetForWindow(hwnd, DTM_IID, ctypes.byref(dtm_ptr))
-
-                    dtm = DataTransferManager._from(dtm_ptr)
+                    DTM_IID = "{A5CAEE9B-8708-49D1-8D36-67D25A8DA00C}"
+                    dtm = interop.get_for_window(hwnd, DTM_IID)
 
                     def on_data_requested(sender, args):
                         dp = args.request.data
@@ -72,16 +49,16 @@ class Api:
                         dp.set_storage_items(files)
 
                     dtm.add_data_requested(on_data_requested)
-                    interop.ShowShareUIForWindow(hwnd)
+                    interop.show_share_ui_for_window(hwnd)
 
                 loop.run_until_complete(run())
             except Exception as e:
                 import traceback
-                err = traceback.format_exc()
-                print("SHARE ERROR:", err)
-                # Показуємо помилку в UI
+                err = str(e)
+                print("SHARE ERROR:", traceback.format_exc())
                 try:
-                    window.evaluate_js(f'alert("Share помилка:\\n{str(e)}")')
+                    safe_err = err.replace('"', '\\"').replace('\n', '\\n')
+                    window.evaluate_js(f'alert("Share помилка:\\n{safe_err}")')
                 except:
                     pass
 
