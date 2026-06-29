@@ -1473,7 +1473,10 @@ function appendPhotoCard(ph, idx, grid) {
           dragPaths = [phPath];
         }
         if (window.pywebview && window.pywebview.api && window.pywebview.api.start_drag) {
+          toastHeader('🖱 Drag started: ' + dragPaths.length + ' files', '');
           window.pywebview.api.start_drag(dragPaths);
+        } else {
+          toastHeader('pywebview.api недоступний', 'error');
         }
       }
     }
