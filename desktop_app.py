@@ -19,16 +19,21 @@ class Api:
             kernel32 = ctypes.windll.kernel32
             user32 = ctypes.windll.user32
 
+            # Правильні типи для 64-bit
+            kernel32.GlobalAlloc.restype = ctypes.c_void_p
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+
             # Формуємо DROPFILES + список файлів у Unicode
             files_str = '\0'.join(paths) + '\0\0'
             files_bytes = files_str.encode('utf-16-le')
 
-            # DROPFILES структура: pFiles(4) + pt(8) + fNC(4) + fWide(4) = 20 bytes
+            # DROPFILES: pFiles(4) + pt.x(4) + pt.y(4) + fNC(4) + fWide(4) = 20 bytes
             header = struct.pack('<IIIII', 20, 0, 0, 0, 1)  # fWide=1
             data = header + files_bytes
             data_len = len(data)
 
-            # Виділяємо глобальну пам'ять
             GMEM_MOVEABLE = 0x0002
             h_mem = kernel32.GlobalAlloc(GMEM_MOVEABLE, data_len)
             if not h_mem:
@@ -41,8 +46,11 @@ class Api:
             ctypes.memmove(ptr, data, data_len)
             kernel32.GlobalUnlock(h_mem)
 
-            # Відкриваємо буфер обміну і встановлюємо дані
             CF_HDROP = 15
+            user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+            user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+            user32.SetClipboardData.restype = ctypes.c_void_p
+
             if not user32.OpenClipboard(None):
                 raise OSError("OpenClipboard failed")
             user32.EmptyClipboard()
