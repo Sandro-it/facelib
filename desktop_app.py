@@ -64,9 +64,37 @@ class Api:
             traceback.print_exc()
             return {"ok": False, "error": str(e)}
 
-    def share_files(self, paths):
-        """Залишено для сумісності."""
-        return self.copy_to_clipboard(paths)
+    def start_drag(self, paths):
+        """Запускає нативний OLE DragDrop з файлами."""
+        import threading
+
+        def do_drag():
+            try:
+                import pythoncom
+                import win32com.shell.shell as shell
+                import win32con
+                import ctypes
+
+                pythoncom.CoInitialize()
+
+                # Створюємо IDataObject з файлами
+                fgd = shell.SHCreateDataObject(None, paths, None)
+
+                # Запускаємо DoDragDrop
+                effect = ctypes.c_ulong(0)
+                shell.SHDoDragDrop(None, fgd, None,
+                    win32con.DROPEFFECT_COPY | win32con.DROPEFFECT_MOVE,
+                    ctypes.byref(effect))
+
+                pythoncom.CoUninitialize()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+
+        threading.Thread(target=do_drag, daemon=True).start()
+        return {"ok": True}
+
+
 
 def start_server():
     global server_process
