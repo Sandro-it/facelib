@@ -741,6 +741,50 @@ def open_photo(path: str):
     subprocess.Popen(["explorer", "/select,", path])
     return {"ok": True}
 
+@app.post("/api/share")
+async def share_photos(data: dict):
+    """Відкрити системний діалог Windows Share для обраних фото."""
+    paths = data.get("paths", [])
+    if not paths:
+        return {"ok": False, "error": "Немає файлів"}
+    try:
+        import asyncio
+        from winrt.windows.storage import StorageFile
+        from winrt.windows.applicationmodel.datatransfer import DataTransferManager, DataPackage
+        import ctypes
+
+        # Отримуємо HWND поточного вікна
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+
+        # Отримуємо StorageFile об'єкти
+        storage_files = []
+        for p in paths:
+            f = await StorageFile.get_file_from_path_async(p)
+            storage_files.append(f)
+
+        # Показуємо Share діалог
+        dtm = DataTransferManager.get_for_current_view()
+
+        def on_data_requested(sender, args):
+            dp = args.request.data
+            dp.properties.title = f"FaceLib — {len(storage_files)} фото"
+            from winrt.windows.storage import IStorageItem
+            from winrt.windows.foundation.collections import IIterable
+            dp.set_storage_items(storage_files)
+
+        dtm.add_data_requested(on_data_requested)
+
+        from winrt.windows.applicationmodel.datatransfer.interop import IDataTransferManagerInterop
+        import comtypes
+        interop = dtm.as_(IDataTransferManagerInterop)
+        await interop.show_share_ui_for_window_async(hwnd)
+
+        return {"ok": True}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/browse-folder")
 def browse_folder():
     """Open native Windows folder picker, return selected path."""
