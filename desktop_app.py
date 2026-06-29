@@ -41,7 +41,8 @@ class Api:
 
             ptr = kernel32.GlobalLock(h_mem)
             if not ptr:
-                raise OSError("GlobalLock failed")
+                err_code = kernel32.GetLastError()
+                raise OSError(f"GlobalLock failed, h_mem={h_mem}, err={err_code}")
 
             ctypes.memmove(ptr, data, data_len)
             kernel32.GlobalUnlock(h_mem)
