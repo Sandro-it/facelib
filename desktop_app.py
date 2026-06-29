@@ -11,29 +11,27 @@ server_process = None
 class Api:
     def share_files(self, paths):
         """Викликає системний діалог Windows Share для переданих файлів."""
-        import asyncio
         import threading
 
         def do_share():
             try:
-                import comtypes
-                import comtypes.client
+                import asyncio
+                import ctypes
+                import ctypes.wintypes
                 from winrt.windows.storage import StorageFile
                 from winrt.windows.applicationmodel.datatransfer import DataTransferManager
+                import comtypes
+                import comtypes.client
 
-                # GUID для IDataTransferManagerInterop
-                DTM_INTEROP_IID = "{3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8}"
-                DTM_IID = comtypes.GUID("{A5CAEE9B-8708-49D1-8D36-67D25A8DA00C}")
+                # Знаходимо HWND вікна FaceLib
+                hwnd = ctypes.windll.user32.FindWindowW(None, "FaceLib")
+                if not hwnd:
+                    hwnd = ctypes.windll.user32.GetForegroundWindow()
 
-                # Отримуємо HWND вікна pywebview
-                hwnd = ctypes.windll.user32.GetForegroundWindow()
-
-                # Отримуємо IDataTransferManagerInterop через COM
-                clsid = comtypes.GUID("{4CE576FA-83DC-4F88-951C-9D0782B4E376}")
-                obj = comtypes.cast(
-                    comtypes.CoCreateInstance(clsid),
-                    comtypes.POINTER(comtypes.IUnknown)
-                )
+                # Виводимо вікно на передній план
+                ctypes.windll.user32.SetForegroundWindow(hwnd)
+                ctypes.windll.user32.BringWindowToTop(hwnd)
+                time.sleep(0.1)
 
                 loop = asyncio.new_event_loop()
 
@@ -43,7 +41,35 @@ class Api:
                         f = await StorageFile.get_file_from_path_async(p)
                         files.append(f)
 
-                    dtm = DataTransferManager.get_for_current_view()
+                    # Отримуємо DataTransferManager через interop з HWND
+                    from winrt._winrt import Object
+                    import comtypes
+                    DTM_INTEROP_IID = comtypes.GUID("{3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8}")
+                    DTM_IID = comtypes.GUID("{A5CAEE9B-8708-49D1-8D36-67D25A8DA00C}")
+
+                    class IDataTransferManagerInterop(comtypes.IUnknown):
+                        _case_insensitive_ = True
+                        _iid_ = DTM_INTEROP_IID
+                        _methods_ = [
+                            comtypes.STDMETHOD(
+                                ctypes.HRESULT, "GetForWindow",
+                                [ctypes.wintypes.HWND, ctypes.POINTER(comtypes.GUID), ctypes.POINTER(ctypes.c_void_p)]
+                            ),
+                            comtypes.STDMETHOD(
+                                ctypes.HRESULT, "ShowShareUIForWindow",
+                                [ctypes.wintypes.HWND]
+                            ),
+                        ]
+
+                    clsid = comtypes.GUID("{4CE576FA-83DC-4F88-951C-9D0782B4E376}")
+                    interop = comtypes.CoCreateInstance(clsid, interface=IDataTransferManagerInterop, clsctx=comtypes.CLSCTX_LOCAL_SERVER)
+
+                    # Отримуємо DTM для нашого вікна
+                    dtm_ptr = ctypes.c_void_p()
+                    interop.GetForWindow(hwnd, DTM_IID, ctypes.byref(dtm_ptr))
+
+                    # Підписуємось на DataRequested
+                    dtm = DataTransferManager._from(dtm_ptr)
 
                     def on_data_requested(sender, args):
                         dp = args.request.data
@@ -51,7 +77,9 @@ class Api:
                         dp.set_storage_items(files)
 
                     dtm.add_data_requested(on_data_requested)
-                    DataTransferManager.show_share_ui()
+
+                    # Показуємо Share UI для нашого вікна
+                    interop.ShowShareUIForWindow(hwnd)
 
                 loop.run_until_complete(run())
             except Exception as e:
