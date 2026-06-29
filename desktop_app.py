@@ -41,9 +41,6 @@ class Api:
                         f = await StorageFile.get_file_from_path_async(p)
                         files.append(f)
 
-                    # Отримуємо DataTransferManager через interop з HWND
-                    from winrt._winrt import Object
-                    import comtypes
                     DTM_INTEROP_IID = comtypes.GUID("{3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8}")
                     DTM_IID = comtypes.GUID("{A5CAEE9B-8708-49D1-8D36-67D25A8DA00C}")
 
@@ -64,11 +61,9 @@ class Api:
                     clsid = comtypes.GUID("{4CE576FA-83DC-4F88-951C-9D0782B4E376}")
                     interop = comtypes.CoCreateInstance(clsid, interface=IDataTransferManagerInterop, clsctx=comtypes.CLSCTX_LOCAL_SERVER)
 
-                    # Отримуємо DTM для нашого вікна
                     dtm_ptr = ctypes.c_void_p()
                     interop.GetForWindow(hwnd, DTM_IID, ctypes.byref(dtm_ptr))
 
-                    # Підписуємось на DataRequested
                     dtm = DataTransferManager._from(dtm_ptr)
 
                     def on_data_requested(sender, args):
@@ -77,14 +72,18 @@ class Api:
                         dp.set_storage_items(files)
 
                     dtm.add_data_requested(on_data_requested)
-
-                    # Показуємо Share UI для нашого вікна
                     interop.ShowShareUIForWindow(hwnd)
 
                 loop.run_until_complete(run())
             except Exception as e:
                 import traceback
-                traceback.print_exc()
+                err = traceback.format_exc()
+                print("SHARE ERROR:", err)
+                # Показуємо помилку в UI
+                try:
+                    window.evaluate_js(f'alert("Share помилка:\\n{str(e)}")')
+                except:
+                    pass
 
         threading.Thread(target=do_share, daemon=True).start()
         return {"ok": True}
