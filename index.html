@@ -393,14 +393,20 @@ async function shareSelectedPhotos() {
     return ph ? ph.path : null;
   }).filter(Boolean);
   if (!paths.length) return;
-  toastHeader('📤 Відкриваємо діалог...', '');
-  var r = await fetch('/api/share', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({paths: paths})
-  });
-  var d = await r.json();
-  if (!d.ok) toastHeader('Помилка: ' + (d.error || 'невідома'), 'error');
+  // Використовуємо pywebview js_api якщо доступне (десктопна версія)
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.share_files) {
+    toastHeader('📤 Відкриваємо діалог...', '');
+    window.pywebview.api.share_files(paths);
+  } else {
+    // Fallback для браузерної версії
+    var r = await fetch('/api/share', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({paths: paths})
+    });
+    var d = await r.json();
+    if (!d.ok) toastHeader('Помилка: ' + (d.error || 'невідома'), 'error');
+  }
 }
 
 async function removeSelectedPhotos() {
