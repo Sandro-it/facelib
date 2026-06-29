@@ -72,13 +72,24 @@ class Api:
             try:
                 import pythoncom
                 import win32com.shell.shell as shell
-                import win32con
+                import win32com.shell.shellcon as shellcon
 
                 pythoncom.CoInitialize()
 
-                fgd = shell.SHCreateDataObject(None, paths, None)
-                effect = pythoncom.DROPEFFECT_COPY | pythoncom.DROPEFFECT_MOVE
-                shell.SHDoDragDrop(None, fgd, None, effect)
+                # Конвертуємо шляхи в PIDLs
+                pidls = []
+                for p in paths:
+                    pidl, _ = shell.SHParseDisplayName(p, None, 0)
+                    pidls.append(pidl)
+
+                # Створюємо IDataObject з PIDLs
+                fgd = shell.SHCreateDataObject(None, pidls, None)
+
+                # Запускаємо DoDragDrop
+                shell.SHDoDragDrop(
+                    None, fgd, None,
+                    shellcon.DROPEFFECT_COPY | shellcon.DROPEFFECT_MOVE
+                )
 
                 pythoncom.CoUninitialize()
             except Exception as e:
