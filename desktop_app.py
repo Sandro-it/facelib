@@ -10,24 +10,45 @@ server_process = None
 
 class Api:
     def copy_to_clipboard(self, paths):
-        """Копіює файли в буфер обміну Windows (CF_HDROP)."""
+        """Копіює файли в буфер обміну Windows (CF_HDROP) через ctypes."""
         try:
-            import win32clipboard
+            import ctypes
+            import ctypes.wintypes
             import struct
 
-            # Формуємо DROPFILES структуру
-            # DROPFILES: fOffset(4) + pt.x(4) + pt.y(4) + fNC(4) + fWide(4) = 20 bytes
-            offset = 20
+            kernel32 = ctypes.windll.kernel32
+            user32 = ctypes.windll.user32
+
+            # Формуємо DROPFILES + список файлів у Unicode
             files_str = '\0'.join(paths) + '\0\0'
             files_bytes = files_str.encode('utf-16-le')
 
-            drop_files = struct.pack('IIIII', offset, 0, 0, 0, 1)  # fWide=1 для Unicode
-            data = drop_files + files_bytes
+            # DROPFILES структура: pFiles(4) + pt(8) + fNC(4) + fWide(4) = 20 bytes
+            header = struct.pack('<IIIII', 20, 0, 0, 0, 1)  # fWide=1
+            data = header + files_bytes
+            data_len = len(data)
 
-            win32clipboard.OpenClipboard()
-            win32clipboard.EmptyClipboard()
-            win32clipboard.SetClipboardData(win32clipboard.CF_HDROP, data)
-            win32clipboard.CloseClipboard()
+            # Виділяємо глобальну пам'ять
+            GMEM_MOVEABLE = 0x0002
+            h_mem = kernel32.GlobalAlloc(GMEM_MOVEABLE, data_len)
+            if not h_mem:
+                raise OSError("GlobalAlloc failed")
+
+            ptr = kernel32.GlobalLock(h_mem)
+            if not ptr:
+                raise OSError("GlobalLock failed")
+
+            ctypes.memmove(ptr, data, data_len)
+            kernel32.GlobalUnlock(h_mem)
+
+            # Відкриваємо буфер обміну і встановлюємо дані
+            CF_HDROP = 15
+            if not user32.OpenClipboard(None):
+                raise OSError("OpenClipboard failed")
+            user32.EmptyClipboard()
+            user32.SetClipboardData(CF_HDROP, h_mem)
+            user32.CloseClipboard()
+
             return {"ok": True, "count": len(paths)}
         except Exception as e:
             import traceback
