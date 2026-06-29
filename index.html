@@ -393,19 +393,15 @@ async function shareSelectedPhotos() {
     return ph ? ph.path : null;
   }).filter(Boolean);
   if (!paths.length) return;
-  // Використовуємо pywebview js_api якщо доступне (десктопна версія)
-  if (window.pywebview && window.pywebview.api && window.pywebview.api.share_files) {
-    toastHeader('📤 Відкриваємо діалог...', '');
-    window.pywebview.api.share_files(paths);
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.copy_to_clipboard) {
+    var d = await window.pywebview.api.copy_to_clipboard(paths);
+    if (d && d.ok) {
+      toastHeader('📋 ' + d.count + ' фото скопійовано — вставте Ctrl+V', 'success');
+    } else {
+      toastHeader('Помилка: ' + (d ? d.error : 'невідома'), 'error');
+    }
   } else {
-    // Fallback для браузерної версії
-    var r = await fetch('/api/share', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({paths: paths})
-    });
-    var d = await r.json();
-    if (!d.ok) toastHeader('Помилка: ' + (d.error || 'невідома'), 'error');
+    toastHeader('Функція доступна тільки в десктопній версії', 'error');
   }
 }
 
@@ -903,7 +899,7 @@ async function openPerson(p) {
   var removeSelBtn = document.createElement('button'); removeSelBtn.className = 'btn'; removeSelBtn.textContent = '✕ Прибрати з групи';
   removeSelBtn.style.cssText = 'background:rgba(248,113,113,.15);border:1px solid var(--red);color:var(--red)';
   removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
-  var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📤 Поділитись';
+  var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
   var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
   cancelSelBtn.onclick = function(){ clearSelection(); };
