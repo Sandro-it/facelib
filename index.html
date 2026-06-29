@@ -1453,6 +1453,37 @@ function appendPhotoCard(ph, idx, grid) {
   coverBtn.textContent = '⭐ Обкладинка';
   coverBtn.addEventListener('click', (function(phId){ return function(e){ e.stopPropagation(); setCover(phId, currentPersonId, e.currentTarget); }; })(ph.id));
   card.appendChild(img); card.appendChild(cb); card.appendChild(overlay); card.appendChild(coverBtn);
+  card.addEventListener('mousedown', (function(phId, phPath){ return function(e){
+    if (e.button !== 0) return; // тільки ліва кнопка
+    var startX = e.clientX, startY = e.clientY;
+    var moved = false;
+    function onMouseMove(ev) {
+      if (!moved && (Math.abs(ev.clientX - startX) > 5 || Math.abs(ev.clientY - startY) > 5)) {
+        moved = true;
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        // Збираємо шляхи — або вибрані або поточне фото
+        var dragPaths;
+        if (selectedPhotoIds.has(phId)) {
+          dragPaths = Array.from(selectedPhotoIds).map(function(id) {
+            var ph = currentPhotos.find(function(p){ return p.id === id; });
+            return ph ? ph.path : null;
+          }).filter(Boolean);
+        } else {
+          dragPaths = [phPath];
+        }
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.start_drag) {
+          window.pywebview.api.start_drag(dragPaths);
+        }
+      }
+    }
+    function onMouseUp() {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    }
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  }; })(ph.id, ph.path));
   card.addEventListener('click', (function(phId){ return function(e){
     if (e.shiftKey) e.preventDefault(); // блокуємо системне виділення тексту
     if (selectedPhotoIds.size > 0) {
