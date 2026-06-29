@@ -19,7 +19,6 @@ class Api:
                 import ctypes
                 import ctypes.wintypes
 
-                # Знаходимо HWND вікна FaceLib
                 hwnd = ctypes.windll.user32.FindWindowW(None, "FaceLib")
                 if not hwnd:
                     hwnd = ctypes.windll.user32.GetForegroundWindow()
@@ -35,10 +34,8 @@ class Api:
                         f = await StorageFile.get_file_from_path_async(p)
                         files.append(f)
 
-                    # IDataTransferManagerInterop через ctypes
-                    # GUID: {3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8}
-                    # Отримуємо через RoGetActivationFactory
-                    ole32 = ctypes.windll.ole32
+                    # Отримуємо IDataTransferManagerInterop через RoGetActivationFactory
+                    combase = ctypes.windll.combase
 
                     class GUID(ctypes.Structure):
                         _fields_ = [
@@ -48,57 +45,56 @@ class Api:
                             ("Data4", ctypes.c_ubyte * 8),
                         ]
 
-                    # IDataTransferManagerInterop IID
                     interop_iid = GUID()
                     interop_iid.Data1 = 0x3A3DCD6C
                     interop_iid.Data2 = 0x3EAB
                     interop_iid.Data3 = 0x43DC
                     interop_iid.Data4 = (ctypes.c_ubyte * 8)(0xBC, 0xDE, 0x45, 0x67, 0x1C, 0xE8, 0x00, 0xC8)
 
-                    # DTM IID
                     dtm_iid = GUID()
                     dtm_iid.Data1 = 0xA5CAEE9B
                     dtm_iid.Data2 = 0x8708
                     dtm_iid.Data3 = 0x49D1
                     dtm_iid.Data4 = (ctypes.c_ubyte * 8)(0x8D, 0x36, 0x67, 0xD2, 0x5A, 0x8D, 0xA0, 0x0C)
 
-                    # Отримуємо factory через RoGetActivationFactory
-                    winrt_core = ctypes.windll.combase
                     class_name = "Windows.ApplicationModel.DataTransfer.DataTransferManager"
                     hstring = ctypes.c_void_p()
-                    winrt_core.WindowsCreateString(
+                    combase.WindowsCreateString(
                         class_name, len(class_name),
                         ctypes.byref(hstring)
                     )
 
                     factory = ctypes.c_void_p()
-                    winrt_core.RoGetActivationFactory(
+                    hr = combase.RoGetActivationFactory(
                         hstring,
                         ctypes.byref(interop_iid),
                         ctypes.byref(factory)
                     )
+                    if hr != 0:
+                        raise OSError(f"RoGetActivationFactory failed: {hr:#010x}")
 
-                    # Vtable: IUnknown(3) + GetForWindow(4th) + ShowShareUIForWindow(5th)
                     vtable = ctypes.cast(
                         ctypes.cast(factory, ctypes.POINTER(ctypes.c_void_p))[0],
                         ctypes.POINTER(ctypes.c_void_p)
                     )
 
-                    # GetForWindow(hwnd, dtm_iid, &dtm_ptr)
+                    # GetForWindow — індекс 3 у vtable (після QueryInterface, AddRef, Release)
                     GetForWindow = ctypes.WINFUNCTYPE(
                         ctypes.HRESULT,
-                        ctypes.c_void_p,
+                        ctypes.c_void_p,   # this
                         ctypes.wintypes.HWND,
                         ctypes.POINTER(GUID),
                         ctypes.POINTER(ctypes.c_void_p)
                     )(vtable[3])
 
                     dtm_ptr = ctypes.c_void_p()
-                    hr = GetForWindow(factory, hwnd, ctypes.byref(dtm_iid), ctypes.byref(dtm_ptr))
+                    hr2 = GetForWindow(factory, hwnd, ctypes.byref(dtm_iid), ctypes.byref(dtm_ptr))
+                    if hr2 != 0:
+                        raise OSError(f"GetForWindow failed: {hr2:#010x}")
 
-                    # Підписуємось через winrt DataTransferManager
-                    from winrt.windows.applicationmodel.datatransfer import DataTransferManager as DTM
-                    dtm = DTM._from(dtm_ptr.value)
+                    # Підписуємось на DataRequested через winrt об'єкт
+                    # Отримуємо DTM з того ж factory через стандартний winrt метод
+                    dtm = DataTransferManager.get_for_current_view()
 
                     def on_data_requested(sender, args):
                         dp = args.request.data
@@ -107,13 +103,15 @@ class Api:
 
                     dtm.add_data_requested(on_data_requested)
 
-                    # ShowShareUIForWindow(hwnd)
+                    # ShowShareUIForWindow — індекс 4 у vtable
                     ShowShareUIForWindow = ctypes.WINFUNCTYPE(
                         ctypes.HRESULT,
-                        ctypes.c_void_p,
+                        ctypes.c_void_p,   # this
                         ctypes.wintypes.HWND,
                     )(vtable[4])
-                    ShowShareUIForWindow(factory, hwnd)
+                    hr3 = ShowShareUIForWindow(factory, hwnd)
+                    if hr3 != 0:
+                        raise OSError(f"ShowShareUIForWindow failed: {hr3:#010x}")
 
                 loop.run_until_complete(run())
             except Exception as e:
