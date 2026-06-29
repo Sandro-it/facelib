@@ -386,6 +386,23 @@ function clearSelection() {
   updateSelectionBar();
 }
 
+async function shareSelectedPhotos() {
+  if (!selectedPhotoIds.size) return;
+  var paths = Array.from(selectedPhotoIds).map(function(id) {
+    var ph = currentPhotos.find(function(p){ return p.id === id; });
+    return ph ? ph.path : null;
+  }).filter(Boolean);
+  if (!paths.length) return;
+  toastHeader('📤 Відкриваємо діалог...', '');
+  var r = await fetch('/api/share', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({paths: paths})
+  });
+  var d = await r.json();
+  if (!d.ok) toastHeader('Помилка: ' + (d.error || 'невідома'), 'error');
+}
+
 async function removeSelectedPhotos() {
   if (!selectedPhotoIds.size) return;
   var ids = Array.from(selectedPhotoIds);
@@ -880,9 +897,11 @@ async function openPerson(p) {
   var removeSelBtn = document.createElement('button'); removeSelBtn.className = 'btn'; removeSelBtn.textContent = '✕ Прибрати з групи';
   removeSelBtn.style.cssText = 'background:rgba(248,113,113,.15);border:1px solid var(--red);color:var(--red)';
   removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
+  var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📤 Поділитись';
+  shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
   var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
   cancelSelBtn.onclick = function(){ clearSelection(); };
-  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(cancelSelBtn);
+  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(cancelSelBtn);
 
   galleryWrap.appendChild(grid);
   galleryWrap.appendChild(selBar);
