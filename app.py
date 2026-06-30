@@ -850,7 +850,10 @@ async def do_update():
         urllib.request.urlretrieve(zip_url, tmp_path)
         with zipfile.ZipFile(tmp_path) as z:
             for member in z.namelist():
-                filename = Path(member).name
+                parts = Path(member).parts
+                if len(parts) != 2:
+                    continue
+                filename = parts[1]
                 if filename in UPDATE_FILES:
                     with z.open(member) as src, open(app_dir / filename, "wb") as dst:
                         dst.write(src.read())
