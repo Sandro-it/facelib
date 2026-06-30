@@ -4,8 +4,107 @@ import threading
 import time
 import sys
 import os
+import ctypes
 
 server_process = None
+
+class Api:
+    def copy_to_clipboard(self, paths):
+        """Копіює файли в буфер обміну Windows (CF_HDROP) через ctypes."""
+        try:
+            import ctypes
+            import ctypes.wintypes
+            import struct
+
+            kernel32 = ctypes.windll.kernel32
+            user32 = ctypes.windll.user32
+
+            # Правильні типи для 64-bit
+            kernel32.GlobalAlloc.restype = ctypes.c_void_p
+            kernel32.GlobalLock.restype = ctypes.c_void_p
+            kernel32.GlobalLock.argtypes = [ctypes.c_void_p]
+            kernel32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+
+            # Формуємо DROPFILES + список файлів у Unicode
+            files_str = '\0'.join(paths) + '\0\0'
+            files_bytes = files_str.encode('utf-16-le')
+
+            # DROPFILES: pFiles(4) + pt.x(4) + pt.y(4) + fNC(4) + fWide(4) = 20 bytes
+            header = struct.pack('<IIIII', 20, 0, 0, 0, 1)  # fWide=1
+            data = header + files_bytes
+            data_len = len(data)
+
+            GMEM_MOVEABLE = 0x0002
+            h_mem = kernel32.GlobalAlloc(GMEM_MOVEABLE, data_len)
+            if not h_mem:
+                raise OSError("GlobalAlloc failed")
+
+            ptr = kernel32.GlobalLock(h_mem)
+            if not ptr:
+                err_code = kernel32.GetLastError()
+                raise OSError(f"GlobalLock failed, h_mem={h_mem}, err={err_code}")
+
+            ctypes.memmove(ptr, data, data_len)
+            kernel32.GlobalUnlock(h_mem)
+
+            CF_HDROP = 15
+            user32.OpenClipboard.argtypes = [ctypes.c_void_p]
+            user32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+            user32.SetClipboardData.restype = ctypes.c_void_p
+
+            if not user32.OpenClipboard(None):
+                raise OSError("OpenClipboard failed")
+            user32.EmptyClipboard()
+            user32.SetClipboardData(CF_HDROP, h_mem)
+            user32.CloseClipboard()
+
+            return {"ok": True, "count": len(paths)}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {"ok": False, "error": str(e)}
+
+    def start_drag(self, paths):
+        """Запускає нативний OLE DragDrop з файлами."""
+        import threading
+
+        def do_drag():
+            try:
+                import pythoncom
+                import win32com.shell.shell as shell
+                import win32com.shell.shellcon as shellcon
+
+                pythoncom.CoInitialize()
+
+                # Конвертуємо шляхи в PIDLs
+                pidls = []
+                for p in paths:
+                    pidl, _ = shell.SHParseDisplayName(p, None, 0)
+                    pidls.append(pidl)
+
+                # Створюємо IDataObject з PIDLs
+                fgd = shell.SHCreateDataObject(None, pidls, None)
+
+                # Запускаємо DoDragDrop
+                shell.SHDoDragDrop(
+                    None, fgd, None,
+                    shellcon.DROPEFFECT_COPY | shellcon.DROPEFFECT_MOVE
+                )
+
+                pythoncom.CoUninitialize()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                try:
+                    safe_err = str(e).replace('"', '\\"').replace('\n', '\\n')
+                    window.evaluate_js(f'alert("Drag помилка:\\n{safe_err}")')
+                except:
+                    pass
+
+        threading.Thread(target=do_drag, daemon=True).start()
+        return {"ok": True}
+
+
 
 def start_server():
     global server_process
@@ -53,12 +152,14 @@ LOADING_HTML = """
 if __name__ == "__main__":
     threading.Thread(target=start_server, daemon=True).start()
 
+    api = Api()
     window = webview.create_window(
         "FaceLib",
         html=LOADING_HTML,
         width=1400,
         height=900,
         min_size=(800, 600),
+        js_api=api,
     )
 
     threading.Thread(target=wait_and_open, daemon=True).start()

@@ -14,7 +14,7 @@ import uvicorn
 app = FastAPI(title="FaceLib")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-VERSION = "1.1"
+VERSION = "1.2"
 GITHUB_REPO = "Sandro-it/facelib"
 
 DB_PATH = "facelib.db"
@@ -741,6 +741,50 @@ def open_photo(path: str):
     subprocess.Popen(["explorer", "/select,", path])
     return {"ok": True}
 
+@app.post("/api/share")
+async def share_photos(data: dict):
+    """Відкрити системний діалог Windows Share для обраних фото."""
+    paths = data.get("paths", [])
+    if not paths:
+        return {"ok": False, "error": "Немає файлів"}
+    try:
+        import asyncio
+        from winrt.windows.storage import StorageFile
+        from winrt.windows.applicationmodel.datatransfer import DataTransferManager, DataPackage
+        import ctypes
+
+        # Отримуємо HWND поточного вікна
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+
+        # Отримуємо StorageFile об'єкти
+        storage_files = []
+        for p in paths:
+            f = await StorageFile.get_file_from_path_async(p)
+            storage_files.append(f)
+
+        # Показуємо Share діалог
+        dtm = DataTransferManager.get_for_current_view()
+
+        def on_data_requested(sender, args):
+            dp = args.request.data
+            dp.properties.title = f"FaceLib — {len(storage_files)} фото"
+            from winrt.windows.storage import IStorageItem
+            from winrt.windows.foundation.collections import IIterable
+            dp.set_storage_items(storage_files)
+
+        dtm.add_data_requested(on_data_requested)
+
+        from winrt.windows.applicationmodel.datatransfer.interop import IDataTransferManagerInterop
+        import comtypes
+        interop = dtm.as_(IDataTransferManagerInterop)
+        await interop.show_share_ui_for_window_async(hwnd)
+
+        return {"ok": True}
+    except Exception as e:
+        import traceback; traceback.print_exc()
+        return {"ok": False, "error": str(e)}
+
+
 @app.get("/api/browse-folder")
 def browse_folder():
     """Open native Windows folder picker, return selected path."""
@@ -785,6 +829,7 @@ async def check_update():
 @app.post("/api/update")
 async def do_update():
     import urllib.request, zipfile, shutil, tempfile
+    UPDATE_FILES = ["app.py", "index.html", "desktop_app.py", "install.bat"]
     try:
         req = urllib.request.Request(
             f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
@@ -796,7 +841,7 @@ async def do_update():
         app_dir = Path(__file__).parent
         backup_dir = app_dir / "backup"
         backup_dir.mkdir(exist_ok=True)
-        for f in ["app.py", "index.html"]:
+        for f in UPDATE_FILES:
             src = app_dir / f
             if src.exists():
                 shutil.copy2(src, backup_dir / f)
@@ -806,7 +851,7 @@ async def do_update():
         with zipfile.ZipFile(tmp_path) as z:
             for member in z.namelist():
                 filename = Path(member).name
-                if filename in ["app.py", "index.html"]:
+                if filename in UPDATE_FILES:
                     with z.open(member) as src, open(app_dir / filename, "wb") as dst:
                         dst.write(src.read())
         Path(tmp_path).unlink()
@@ -821,7 +866,7 @@ async def do_rollback():
     backup_dir = app_dir / "backup"
     if not backup_dir.exists():
         return {"ok": False, "error": "No backup found"}
-    for f in ["app.py", "index.html"]:
+    for f in ["app.py", "index.html", "desktop_app.py", "install.bat"]:
         src = backup_dir / f
         if src.exists():
             shutil.copy2(src, app_dir / f)
