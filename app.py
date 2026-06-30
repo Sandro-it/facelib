@@ -806,7 +806,11 @@ async def do_update():
         urllib.request.urlretrieve(zip_url, tmp_path)
         with zipfile.ZipFile(tmp_path) as z:
             for member in z.namelist():
-                filename = Path(member).name
+                # Беремо файли тільки з кореня релізу, ігноруючи docs/ та інші підпапки
+                parts = Path(member).parts
+                if len(parts) != 2:
+                    continue
+                filename = parts[1]
                 if filename in ["app.py", "index.html"]:
                     with z.open(member) as src, open(app_dir / filename, "wb") as dst:
                         dst.write(src.read())
