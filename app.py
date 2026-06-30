@@ -785,6 +785,7 @@ async def check_update():
 @app.post("/api/update")
 async def do_update():
     import urllib.request, zipfile, shutil, tempfile
+    UPDATE_FILES = ["app.py", "index.html", "desktop_app.py", "install.bat"]
     try:
         req = urllib.request.Request(
             f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest",
@@ -796,7 +797,7 @@ async def do_update():
         app_dir = Path(__file__).parent
         backup_dir = app_dir / "backup"
         backup_dir.mkdir(exist_ok=True)
-        for f in ["app.py", "index.html"]:
+        for f in UPDATE_FILES:
             src = app_dir / f
             if src.exists():
                 shutil.copy2(src, backup_dir / f)
@@ -805,8 +806,11 @@ async def do_update():
         urllib.request.urlretrieve(zip_url, tmp_path)
         with zipfile.ZipFile(tmp_path) as z:
             for member in z.namelist():
-                filename = Path(member).name
-                if filename in ["app.py", "index.html"]:
+                parts = Path(member).parts
+                if len(parts) != 2:
+                    continue
+                filename = parts[1]
+                if filename in UPDATE_FILES:
                     with z.open(member) as src, open(app_dir / filename, "wb") as dst:
                         dst.write(src.read())
         Path(tmp_path).unlink()
@@ -821,7 +825,7 @@ async def do_rollback():
     backup_dir = app_dir / "backup"
     if not backup_dir.exists():
         return {"ok": False, "error": "No backup found"}
-    for f in ["app.py", "index.html"]:
+    for f in ["app.py", "index.html", "desktop_app.py", "install.bat"]:
         src = backup_dir / f
         if src.exists():
             shutil.copy2(src, app_dir / f)
