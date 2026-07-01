@@ -959,19 +959,27 @@ async function openPerson(p) {
   // Отримуємо список років (DESC: 2025, 2024, ...)
   try {
     var yearsResp = await fetch('/api/persons/' + p.id + '/years');
+    if (!yearsResp.ok) throw new Error('years HTTP ' + yearsResp.status);
     allYearsOriginal = await yearsResp.json();
-  } catch(e) { allYearsOriginal = []; }
+  } catch(e) {
+    grid.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Помилка: ' + e.message + '</p></div>';
+    return;
+  }
   updateTimeline(allYearsOriginal);
 
   if (!allYearsOriginal.length) {
-    // Немає дат — завантажуємо всі фото без фільтра
-    var r2 = await fetch('/api/persons/' + p.id + '/photos?limit=200&offset=0');
-    var batch0 = await r2.json();
-    if (!batch0.length) {
-      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🖼️</div><p>Фото не знайдено</p></div>';
-      return;
+    try {
+      var r2 = await fetch('/api/persons/' + p.id + '/photos?limit=200&offset=0');
+      if (!r2.ok) throw new Error('photos HTTP ' + r2.status);
+      var batch0 = await r2.json();
+      if (!batch0.length) {
+        grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🖼️</div><p>Фото не знайдено</p></div>';
+        return;
+      }
+      batch0.forEach(function(ph, i) { currentPhotos.push(ph); appendPhotoCard(ph, i, grid); });
+    } catch(e) {
+      grid.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Помилка: ' + e.message + '</p></div>';
     }
-    batch0.forEach(function(ph, i) { currentPhotos.push(ph); appendPhotoCard(ph, i, grid); });
     return;
   }
 
