@@ -623,6 +623,10 @@ var personsSearchQuery = '';
 var personsLoading = false;
 
 async function loadPersons(highlightIds) {
+  // Якщо викликається з null але є активний пошук за фото — зберігаємо його
+  if (highlightIds === null && currentHighlightIds) {
+    highlightIds = currentHighlightIds;
+  }
   personsOffset = 0;
   personsAllLoaded = false;
   personsLoading = false;
@@ -651,14 +655,24 @@ async function loadMorePersons(highlightIds) {
     return;
   }
   persons.forEach(function(p) { allPersonsCache[p.id] = p; });
+
+  // При пошуку за фото — показуємо знайдених першими (за % збігу), потім решту
+  if (highlightIds && Object.keys(highlightIds).length > 0) {
+    persons.sort(function(a, b) {
+      var simA = highlightIds[a.id] || 0;
+      var simB = highlightIds[b.id] || 0;
+      return simB - simA;
+    });
+  }
+
   var list = document.getElementById('personList');
 
-  // Додаємо роздільник якщо перша не-обрана людина в цьому батчі
+  // При активному пошуку за фото — роздільник обраних не показуємо
   var lastCard = list.lastElementChild;
-  var lastIsFav = lastCard && lastCard.dataset.fav === '1';
+  var lastIsFav = highlightIds ? false : (lastCard && lastCard.dataset.fav === '1');
   persons.forEach(function(p) {
-    // Роздільник між обраними і рештою
-    if (lastIsFav && !p.is_favorite) {
+    // Роздільник між обраними і рештою — тільки без пошуку за фото
+    if (!highlightIds && lastIsFav && !p.is_favorite) {
       var div = document.createElement('div');
       div.className = 'favorites-divider';
       div.id = 'favDivider';
