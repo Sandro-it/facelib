@@ -623,6 +623,10 @@ var personsSearchQuery = '';
 var personsLoading = false;
 
 async function loadPersons(highlightIds) {
+  // Якщо викликається з null але є активний пошук за фото — зберігаємо його
+  if (highlightIds === null && currentHighlightIds) {
+    highlightIds = currentHighlightIds;
+  }
   personsOffset = 0;
   personsAllLoaded = false;
   personsLoading = false;
