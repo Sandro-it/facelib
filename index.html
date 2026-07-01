@@ -130,20 +130,19 @@
 
   /* Timeline */
   .gallery-wrap{flex:1;display:flex;overflow:hidden}
-  .places-panel{width:0;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);overflow:hidden;transition:width .2s;display:flex;flex-direction:column}
-  .places-panel.open{width:150px}
-  .places-header{padding:8px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);white-space:nowrap}
+  .places-panel{width:0;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);overflow:hidden;transition:width .2s ease;display:flex;flex-direction:column}
+  .places-panel.open{width:148px}
+  .places-header{padding:8px 10px;border-bottom:1px solid var(--border);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);white-space:nowrap}
   .places-list{flex:1;overflow-y:auto;padding:4px}
-  .places-list::-webkit-scrollbar{width:3px}
-  .places-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-  .place-item{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .15s;gap:4px}
+  .place-item{display:flex;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:6px;cursor:pointer;transition:background .12s;gap:4px}
   .place-item:hover{background:var(--surface2)}
-  .place-item.active{background:var(--accent-dim);color:var(--accent)}
-  .place-name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1}
+  .place-item.active{background:var(--accent-dim)}
+  .place-name{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;color:var(--text)}
   .place-count{font-size:11px;color:var(--text-dim);flex-shrink:0}
+  .place-item.active .place-name{color:var(--accent)}
   .place-item.active .place-count{color:var(--accent)}
-  .places-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text-dim);transition:all .15s;flex-shrink:0;font-size:14px}
-  .places-btn:hover,.places-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+  .places-btn{width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s;flex-shrink:0;margin:4px auto 0;padding:0}
+  .places-btn:hover,.places-btn.active{background:var(--accent-dim);border-color:var(--accent)}
   .timeline{width:48px;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;gap:0;overflow:visible;justify-content:space-between;position:relative}
   .timeline-indicator{position:absolute;left:0;right:0;top:50%;height:3px;background:var(--accent);pointer-events:none;border-radius:2px;box-shadow:0 0 8px var(--accent),0 0 3px var(--accent);opacity:1;z-index:10}
   .timeline-year{font-size:9px;color:var(--text-dim);cursor:pointer;padding:3px 4px;border-radius:4px;writing-mode:vertical-rl;text-orientation:mixed;transform:rotate(180deg);transition:all .15s;text-align:center;line-height:1}
@@ -637,10 +636,6 @@ var personsSearchQuery = '';
 var personsLoading = false;
 
 async function loadPersons(highlightIds) {
-  // Якщо викликається з null але є активний пошук за фото — зберігаємо його
-  if (highlightIds === null && currentHighlightIds) {
-    highlightIds = currentHighlightIds;
-  }
   personsOffset = 0;
   personsAllLoaded = false;
   personsLoading = false;
@@ -669,24 +664,14 @@ async function loadMorePersons(highlightIds) {
     return;
   }
   persons.forEach(function(p) { allPersonsCache[p.id] = p; });
-
-  // При пошуку за фото — показуємо знайдених першими (за % збігу), потім решту
-  if (highlightIds && Object.keys(highlightIds).length > 0) {
-    persons.sort(function(a, b) {
-      var simA = highlightIds[a.id] || 0;
-      var simB = highlightIds[b.id] || 0;
-      return simB - simA;
-    });
-  }
-
   var list = document.getElementById('personList');
 
-  // При активному пошуку за фото — роздільник обраних не показуємо
+  // Додаємо роздільник якщо перша не-обрана людина в цьому батчі
   var lastCard = list.lastElementChild;
-  var lastIsFav = highlightIds ? false : (lastCard && lastCard.dataset.fav === '1');
+  var lastIsFav = lastCard && lastCard.dataset.fav === '1';
   persons.forEach(function(p) {
-    // Роздільник між обраними і рештою — тільки без пошуку за фото
-    if (!highlightIds && lastIsFav && !p.is_favorite) {
+    // Роздільник між обраними і рештою
+    if (lastIsFav && !p.is_favorite) {
       var div = document.createElement('div');
       div.className = 'favorites-divider';
       div.id = 'favDivider';
@@ -917,78 +902,23 @@ async function openPerson(p) {
   var timelineIndicator = document.createElement('div'); timelineIndicator.className = 'timeline-indicator'; timelineIndicator.id = 'timelineIndicator';
   timeline.appendChild(timelineIndicator);
 
-  // Кнопка 📍 над шкалою часу
+  // Кнопка 📍 зверху шкали часу
   var placesBtn = document.createElement('button');
-  placesBtn.className = 'places-btn'; placesBtn.id = 'placesBtn'; placesBtn.title = 'Місця';
-  placesBtn.textContent = '📍';
-  placesBtn.style.cssText = 'margin:4px auto 2px;display:block';
+  placesBtn.className = 'places-btn'; placesBtn.id = 'placesBtn';
+  placesBtn.title = 'Місця'; placesBtn.textContent = '📍';
   timeline.insertBefore(placesBtn, timelineIndicator);
 
   // Панель міст (між галереєю і шкалою)
-  var placesPanel = document.createElement('div'); placesPanel.className = 'places-panel'; placesPanel.id = 'placesPanel';
-  var placesHeader = document.createElement('div'); placesHeader.className = 'places-header'; placesHeader.textContent = '📍 Місця';
-  var placesList = document.createElement('div'); placesList.className = 'places-list'; placesList.id = 'placesList';
+  var placesPanel = document.createElement('div');
+  placesPanel.className = 'places-panel'; placesPanel.id = 'placesPanel';
+  var placesHeader = document.createElement('div');
+  placesHeader.className = 'places-header'; placesHeader.textContent = 'Місця';
+  var placesList = document.createElement('div');
+  placesList.className = 'places-list'; placesList.id = 'placesList';
   placesPanel.appendChild(placesHeader);
   placesPanel.appendChild(placesList);
 
-  var currentPlace = null;
-
-  placesBtn.onclick = async function() {
-    var isOpen = placesPanel.classList.contains('open');
-    if (isOpen) {
-      // Закриваємо — повертаємо всі фото
-      placesPanel.classList.remove('open');
-      placesBtn.classList.remove('active');
-      currentPlace = null;
-      // Перезавантажуємо галерею без фільтра
-      openPerson(p);
-    } else {
-      placesBtn.classList.add('active');
-      placesPanel.classList.add('open');
-      placesList.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-dim)">Завантаження...</div>';
-      try {
-        var r2 = await fetch('/api/persons/' + p.id + '/places');
-        var places = await r2.json();
-        placesList.innerHTML = '';
-        if (!places.length) {
-          placesList.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-dim)">GPS не знайдено</div>';
-          return;
-        }
-        places.forEach(function(pl) {
-          var item = document.createElement('div');
-          item.className = 'place-item';
-          var name = document.createElement('span'); name.className = 'place-name';
-          name.textContent = pl.city; name.title = pl.city + (pl.country ? ', ' + pl.country : '');
-          var cnt = document.createElement('span'); cnt.className = 'place-count'; cnt.textContent = pl.count;
-          item.appendChild(name); item.appendChild(cnt);
-          item.addEventListener('click', async function() {
-            document.querySelectorAll('.place-item').forEach(function(i){ i.classList.remove('active'); });
-            item.classList.add('active');
-            currentPlace = pl.city;
-            // Завантажуємо фото для цього міста
-            var grid2 = document.getElementById('photoGrid');
-            if (!grid2) return;
-            grid2.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Завантаження...</p></div>';
-            currentPhotos = [];
-            lastRenderedYear = null;
-            if (currentAbort) currentAbort.abort();
-            var cityEnc = encodeURIComponent(pl.city);
-            var resp = await fetch('/api/persons/' + p.id + '/places/' + cityEnc + '/photos');
-            var photos = await resp.json();
-            grid2.innerHTML = '';
-            if (!photos.length) {
-              grid2.innerHTML = '<div class="empty-state"><div class="empty-icon">📍</div><p>Фото не знайдено</p></div>';
-              return;
-            }
-            photos.forEach(function(ph, i) { currentPhotos.push(ph); appendPhotoCard(ph, i, grid2); });
-          });
-          placesList.appendChild(item);
-        });
-      } catch(e) {
-        placesList.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--red)">Помилка</div>';
-      }
-    }
-  };
+  placesBtn.onclick = function() { togglePlaces(p.id); };
 
   // Панель вибору фото
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
@@ -1818,7 +1748,87 @@ initVersion();
 loadFolders();
 fetchStatus();
 setInterval(fetchStatus, 2000);
-// Повторювати loadPersons поки список порожній
+
+// ---------------------------------------------------------------------------
+// Places
+// ---------------------------------------------------------------------------
+var placesActive = false;
+var currentPlaceFilter = null;
+
+async function togglePlaces(personId) {
+  var btn = document.getElementById('placesBtn');
+  var panel = document.getElementById('placesPanel');
+  var list = document.getElementById('placesList');
+  if (!btn || !panel) return;
+
+  if (placesActive) {
+    // Закриваємо
+    placesActive = false;
+    currentPlaceFilter = null;
+    btn.classList.remove('active');
+    panel.classList.remove('open');
+    // Повертаємо звичайну галерею
+    var person = null;
+    for (var id in allPersonsCache) { if (allPersonsCache[id].id == personId) { person = allPersonsCache[id]; break; } }
+    if (person) openPerson(person);
+    return;
+  }
+
+  // Відкриваємо
+  placesActive = true;
+  btn.classList.add('active');
+  panel.classList.add('open');
+  list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-dim)">Завантаження...</div>';
+
+  try {
+    var r = await fetch('/api/persons/' + personId + '/places');
+    var places = await r.json();
+    list.innerHTML = '';
+    if (!places.length) {
+      list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-dim)">GPS не знайдено</div>';
+      return;
+    }
+    places.forEach(function(pl) {
+      var item = document.createElement('div');
+      item.className = 'place-item';
+      var name = document.createElement('span'); name.className = 'place-name';
+      name.textContent = pl.city; name.title = pl.city + (pl.country ? ', ' + pl.country : '');
+      var cnt = document.createElement('span'); cnt.className = 'place-count'; cnt.textContent = pl.count;
+      item.appendChild(name); item.appendChild(cnt);
+      item.addEventListener('click', function() {
+        document.querySelectorAll('.place-item').forEach(function(i){ i.classList.remove('active'); });
+        item.classList.add('active');
+        currentPlaceFilter = pl.city;
+        loadPlacePhotos(personId, pl.city);
+      });
+      list.appendChild(item);
+    });
+  } catch(e) {
+    list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--red)">Помилка: ' + e.message + '</div>';
+  }
+}
+
+async function loadPlacePhotos(personId, city) {
+  var grid = document.getElementById('photoGrid');
+  if (!grid) return;
+  grid.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Завантаження...</p></div>';
+  currentPhotos = [];
+  try {
+    var r = await fetch('/api/persons/' + personId + '/places/' + encodeURIComponent(city) + '/photos');
+    var photos = await r.json();
+    grid.innerHTML = '';
+    lastRenderedYear = null;
+    if (!photos.length) {
+      grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📍</div><p>Фото не знайдено</p></div>';
+      return;
+    }
+    photos.forEach(function(ph, i) { currentPhotos.push(ph); appendPhotoCard(ph, i, grid); });
+  } catch(e) {
+    grid.innerHTML = '<div class="empty-state"><p>Помилка завантаження</p></div>';
+  }
+}
+
+
 (async function initialLoad() {
   for (var i = 0; i < 60; i++) {
     await loadPersons(null);
