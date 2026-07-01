@@ -73,6 +73,12 @@ def init_db():
             path TEXT UNIQUE NOT NULL,
             enabled INTEGER DEFAULT 1
         );
+        CREATE TABLE IF NOT EXISTS geo_cache (
+            lat_lon TEXT PRIMARY KEY,
+            city TEXT,
+            country TEXT,
+            cached_at REAL DEFAULT (unixepoch())
+        );
         CREATE INDEX IF NOT EXISTS idx_faces_person ON faces(person_id);
         CREATE INDEX IF NOT EXISTS idx_faces_photo ON faces(photo_id);
         CREATE INDEX IF NOT EXISTS idx_faces_person_photo ON faces(person_id, photo_id);
@@ -94,6 +100,15 @@ def ensure_migrations():
             conn.execute("ALTER TABLE persons ADD COLUMN is_favorite INTEGER DEFAULT 0")
         if 'sort_order' not in cols:
             conn.execute("ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
+        # Add geo_cache table if not exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS geo_cache (
+                lat_lon TEXT PRIMARY KEY,
+                city TEXT,
+                country TEXT,
+                cached_at REAL DEFAULT (unixepoch())
+            )
+        """)
 
 try:
     ensure_indexes()
@@ -532,7 +547,147 @@ def get_person(person_id: int):
     return {"id": r["id"], "name": r["name"], "photo_count": r["photo_count"],
             "cover_url": cover_url, "is_favorite": bool(r["is_favorite"]), "sort_order": r["sort_order"]}
 
-@app.get("/api/persons/{person_id}/years")
+# ---------------------------------------------------------------------------
+# Places / GPS
+# ---------------------------------------------------------------------------
+
+def get_gps_from_exif(path: str):
+    """Зчитує GPS координати з EXIF фото. Повертає (lat, lon) або None."""
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS, GPSTAGS
+        img = Image.open(path)
+        exif_data = img._getexif()
+        if not exif_data:
+            return None
+        gps_info = {}
+        for tag_id, value in exif_data.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == "GPSInfo":
+                for gps_tag_id, gps_value in value.items():
+                    gps_tag = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                    gps_info[gps_tag] = gps_value
+        if not gps_info or "GPSLatitude" not in gps_info:
+            return None
+        def to_decimal(coord, ref):
+            d, m, s = coord
+            decimal = float(d) + float(m) / 60 + float(s) / 3600
+            if ref in ('S', 'W'):
+                decimal = -decimal
+            return decimal
+        lat = to_decimal(gps_info["GPSLatitude"], gps_info.get("GPSLatitudeRef", "N"))
+        lon = to_decimal(gps_info["GPSLongitude"], gps_info.get("GPSLongitudeRef", "E"))
+        return (round(lat, 4), round(lon, 4))
+    except Exception:
+        return None
+
+def reverse_geocode(lat: float, lon: float) -> dict:
+    """Отримує назву міста через Nominatim. Кешує результат в БД."""
+    lat_lon_key = f"{lat},{lon}"
+    db = get_db()
+    cached = db.execute("SELECT city, country FROM geo_cache WHERE lat_lon=?", (lat_lon_key,)).fetchone()
+    if cached:
+        return {"city": cached["city"], "country": cached["country"]}
+    try:
+        import urllib.request
+        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=10&accept-language=uk"
+        req = urllib.request.Request(url, headers={"User-Agent": "FaceLib/1.3"})
+        with urllib.request.urlopen(req, timeout=5) as r:
+            data = json.loads(r.read())
+        addr = data.get("address", {})
+        city = (addr.get("city") or addr.get("town") or addr.get("village") or
+                addr.get("municipality") or addr.get("county") or "Невідомо")
+        country = addr.get("country", "")
+        db.execute(
+            "INSERT OR REPLACE INTO geo_cache(lat_lon, city, country) VALUES(?,?,?)",
+            (lat_lon_key, city, country)
+        )
+        db.commit()
+        return {"city": city, "country": country}
+    except Exception:
+        return {"city": "Невідомо", "country": ""}
+
+@app.get("/api/persons/{person_id}/places")
+def person_places(person_id: int):
+    """Повертає список міст для людини з кількістю фото."""
+    db = get_db()
+    photos = db.execute("""
+        SELECT ph.path FROM photos ph
+        JOIN faces f ON f.photo_id = ph.id
+        WHERE f.person_id = ?
+        GROUP BY ph.id
+    """, (person_id,)).fetchall()
+
+    city_counts = {}
+    no_location = 0
+
+    for ph in photos:
+        coords = get_gps_from_exif(ph["path"])
+        if not coords:
+            no_location += 1
+            continue
+        geo = reverse_geocode(coords[0], coords[1])
+        city = geo["city"]
+        country = geo["country"]
+        key = city
+        if key not in city_counts:
+            city_counts[key] = {"city": city, "country": country, "count": 0}
+        city_counts[key]["count"] += 1
+
+    result = sorted(city_counts.values(), key=lambda x: x["count"], reverse=True)
+    if no_location > 0:
+        result.append({"city": "Без локації", "country": "", "count": no_location})
+    return result
+
+@app.get("/api/persons/{person_id}/places/{city}/photos")
+def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int = 0):
+    """Повертає фото людини з конкретного міста."""
+    db = get_db()
+    photos = db.execute("""
+        SELECT ph.path, ph.taken_at FROM photos ph
+        JOIN faces f ON f.photo_id = ph.id
+        WHERE f.person_id = ?
+        GROUP BY ph.id
+        ORDER BY ph.taken_at DESC
+    """, (person_id,)).fetchall()
+
+    matched = []
+    for ph in photos:
+        if city == "Без локації":
+            coords = get_gps_from_exif(ph["path"])
+            if coords is None:
+                matched.append(ph)
+        else:
+            coords = get_gps_from_exif(ph["path"])
+            if coords:
+                geo = reverse_geocode(coords[0], coords[1])
+                if geo["city"] == city:
+                    matched.append(ph)
+
+    page = matched[offset:offset+limit]
+    result = []
+    for ph in page:
+        import os, time as time_mod
+        taken = ph["taken_at"]
+        year = None
+        if taken:
+            year = time_mod.gmtime(taken).tm_year
+        thumb = make_thumb(ph["path"], 0, None) if os.path.exists(ph["path"]) else None
+        pid_rows = db.execute("""
+            SELECT f.id FROM faces f
+            JOIN photos p ON p.id = f.photo_id
+            WHERE p.path = ? AND f.person_id = ?
+        """, (ph["path"], person_id)).fetchone()
+        face_id = pid_rows["id"] if pid_rows else 0
+        result.append({
+            "id": face_id,
+            "path": ph["path"],
+            "thumb": thumb,
+            "year": year
+        })
+    return result
+
+
 def person_years(person_id: int):
     """Return all years for a person for timeline."""
     import datetime
