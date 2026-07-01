@@ -903,11 +903,17 @@ async function openPerson(p) {
   timeline.appendChild(timelineIndicator);
 
   // Кнопка 📍 зверху шкали часу
+  // Видаляємо стару кнопку якщо є
+  var oldBtn = document.getElementById('placesBtn');
+  if (oldBtn) oldBtn.remove();
+  var oldPanel = document.getElementById('placesPanel');
+  if (oldPanel) oldPanel.remove();
+
   var placesBtn = document.createElement('button');
   placesBtn.className = 'places-btn'; placesBtn.id = 'placesBtn';
   placesBtn.title = 'Місця'; placesBtn.textContent = '📍';
-  placesBtn.style.cssText = 'position:absolute;top:6px;left:50%;transform:translateX(-50%);z-index:20;width:28px;height:28px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;padding:0';
-  timeline.appendChild(placesBtn);
+  placesBtn.style.cssText = 'position:fixed;bottom:60px;right:6px;z-index:9999;width:32px;height:32px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;cursor:pointer;font-size:16px';
+  document.body.appendChild(placesBtn);
 
   // Панель міст (між галереєю і шкалою)
   var placesPanel = document.createElement('div');
