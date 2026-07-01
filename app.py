@@ -109,6 +109,12 @@ def ensure_migrations():
                 cached_at REAL DEFAULT (unixepoch())
             )
         """)
+        # Add city column to photos for caching
+        photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]
+        if 'city' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN city TEXT")
+        if 'country' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN country TEXT")
 
 try:
     ensure_indexes()
@@ -609,10 +615,10 @@ def reverse_geocode(lat: float, lon: float) -> dict:
 
 @app.get("/api/persons/{person_id}/places")
 def person_places(person_id: int):
-    """Повертає список міст для людини з кількістю фото."""
+    """Повертає список міст для людини з кількістю фото. Кешує city в photos."""
     db = get_db()
     photos = db.execute("""
-        SELECT ph.path FROM photos ph
+        SELECT ph.id, ph.path, ph.city, ph.country FROM photos ph
         JOIN faces f ON f.photo_id = ph.id
         WHERE f.person_id = ?
         GROUP BY ph.id
@@ -622,18 +628,34 @@ def person_places(person_id: int):
     no_location = 0
 
     for ph in photos:
+        # Якщо city вже закешовано в БД — використовуємо його
+        if ph["city"] is not None:
+            city = ph["city"]
+            country = ph["country"] or ""
+            if city == "":
+                no_location += 1
+            else:
+                if city not in city_counts:
+                    city_counts[city] = {"city": city, "country": country, "count": 0}
+                city_counts[city]["count"] += 1
+            continue
+
+        # Читаємо EXIF і кешуємо
         coords = get_gps_from_exif(ph["path"])
         if not coords:
+            db.execute("UPDATE photos SET city='', country='' WHERE id=?", (ph["id"],))
             no_location += 1
             continue
+
         geo = reverse_geocode(coords[0], coords[1])
         city = geo["city"]
         country = geo["country"]
-        key = city
-        if key not in city_counts:
-            city_counts[key] = {"city": city, "country": country, "count": 0}
-        city_counts[key]["count"] += 1
+        db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, ph["id"]))
+        if city not in city_counts:
+            city_counts[city] = {"city": city, "country": country, "count": 0}
+        city_counts[city]["count"] += 1
 
+    db.commit()
     result = sorted(city_counts.values(), key=lambda x: x["count"], reverse=True)
     if no_location > 0:
         result.append({"city": "Без локації", "country": "", "count": no_location})
@@ -641,48 +663,41 @@ def person_places(person_id: int):
 
 @app.get("/api/persons/{person_id}/places/{city}/photos")
 def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int = 0):
-    """Повертає фото людини з конкретного міста."""
+    """Повертає фото людини з конкретного міста — використовує кеш з БД."""
+    import os, time as time_mod
     db = get_db()
-    photos = db.execute("""
-        SELECT ph.path, ph.taken_at FROM photos ph
-        JOIN faces f ON f.photo_id = ph.id
-        WHERE f.person_id = ?
-        GROUP BY ph.id
-        ORDER BY ph.taken_at DESC
-    """, (person_id,)).fetchall()
 
-    matched = []
-    for ph in photos:
-        if city == "Без локації":
-            coords = get_gps_from_exif(ph["path"])
-            if coords is None:
-                matched.append(ph)
-        else:
-            coords = get_gps_from_exif(ph["path"])
-            if coords:
-                geo = reverse_geocode(coords[0], coords[1])
-                if geo["city"] == city:
-                    matched.append(ph)
+    if city == "Без локації":
+        rows = db.execute("""
+            SELECT ph.id, ph.path, ph.taken_at FROM photos ph
+            JOIN faces f ON f.photo_id = ph.id
+            WHERE f.person_id = ? AND (ph.city = '' OR ph.city IS NULL)
+            GROUP BY ph.id
+            ORDER BY ph.taken_at DESC
+            LIMIT ? OFFSET ?
+        """, (person_id, limit, offset)).fetchall()
+    else:
+        rows = db.execute("""
+            SELECT ph.id, ph.path, ph.taken_at FROM photos ph
+            JOIN faces f ON f.photo_id = ph.id
+            WHERE f.person_id = ? AND ph.city = ?
+            GROUP BY ph.id
+            ORDER BY ph.taken_at DESC
+            LIMIT ? OFFSET ?
+        """, (person_id, city, limit, offset)).fetchall()
 
-    page = matched[offset:offset+limit]
     result = []
-    for ph in page:
-        import os, time as time_mod
-        taken = ph["taken_at"]
+    for r in rows:
         year = None
-        if taken:
-            year = time_mod.gmtime(taken).tm_year
-        thumb = make_thumb(ph["path"], 0, None) if os.path.exists(ph["path"]) else None
-        pid_rows = db.execute("""
-            SELECT f.id FROM faces f
-            JOIN photos p ON p.id = f.photo_id
-            WHERE p.path = ? AND f.person_id = ?
-        """, (ph["path"], person_id)).fetchone()
-        face_id = pid_rows["id"] if pid_rows else 0
+        if r["taken_at"]:
+            try:
+                year = time_mod.gmtime(r["taken_at"]).tm_year
+            except Exception:
+                pass
         result.append({
-            "id": face_id,
-            "path": ph["path"],
-            "thumb": thumb,
+            "id": r["id"],
+            "path": r["path"],
+            "thumb": make_photo_thumb(r["path"], r["id"]),
             "year": year
         })
     return result
