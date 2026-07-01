@@ -919,6 +919,7 @@ async function openPerson(p) {
     var tl = document.getElementById('photoTimeline');
     if (tl) {
       var rect = tl.getBoundingClientRect();
+      alert('timeline top:' + rect.top + ' right:' + rect.right + ' innerWidth:' + window.innerWidth);
       placesBtn.style.top = (rect.top + 6) + 'px';
       placesBtn.style.right = (window.innerWidth - rect.right + 6) + 'px';
     }
