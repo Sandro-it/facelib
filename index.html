@@ -1815,7 +1815,8 @@ async function togglePlaces(personId) {
   var list = document.getElementById('placesList');
   if (!btn || !panel) return;
 
-  if (placesActive) {
+  var isOpen = panel && panel.classList.contains('open');
+  if (isOpen) {
     // Закриваємо — просто ховаємо панель, галерею не перезавантажуємо
     placesActive = false;
     currentPlaceFilter = null;
