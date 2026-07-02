@@ -319,6 +319,19 @@ def run_indexer():
                                      (fpath, time.time(), taken_at))
                     photo_id = cur.lastrowid or db.execute(
                         "SELECT id FROM photos WHERE path=?", (fpath,)).fetchone()[0]
+                    # Кешуємо GPS тільки для нових фото
+                    if cur.lastrowid:
+                        try:
+                            coords = get_gps_from_exif(fpath)
+                            if coords:
+                                geo = reverse_geocode(coords[0], coords[1])
+                                db.execute("UPDATE photos SET city=?, country=? WHERE id=?",
+                                           (geo["city"], geo["country"], photo_id))
+                            else:
+                                db.execute("UPDATE photos SET city='', country='' WHERE id=?",
+                                           (photo_id,))
+                        except Exception:
+                            pass
                     for fi, face in enumerate(faces):
                         emb = face.embedding.astype(np.float32).tobytes()
                         bbox = json.dumps(face.bbox.tolist())
