@@ -609,8 +609,7 @@ def reverse_geocode(lat: float, lon: float) -> dict:
     if cached:
         return {"city": cached["city"], "country": cached["country"]}
     try:
-        import urllib.request, time as time_mod
-        time_mod.sleep(0.5)
+        import urllib.request
         url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=10&accept-language=uk"
         req = urllib.request.Request(url, headers={"User-Agent": "FaceLib/1.3"})
         with urllib.request.urlopen(req, timeout=3) as r:
