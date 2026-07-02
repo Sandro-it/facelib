@@ -848,6 +848,8 @@ function onPersonListScroll(el) {
 
 async function openPerson(p) {
   currentPersonId = p.id;
+  placesActive = false;
+  currentPlaceFilter = null;
   document.querySelectorAll('.person-card').forEach(function(c){ c.classList.toggle('active', +c.dataset.id === p.id); });
   var content = document.getElementById('contentArea');
   content.innerHTML = '';
