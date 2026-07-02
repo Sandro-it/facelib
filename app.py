@@ -609,10 +609,11 @@ def reverse_geocode(lat: float, lon: float) -> dict:
     if cached:
         return {"city": cached["city"], "country": cached["country"]}
     try:
-        import urllib.request
+        import urllib.request, time as time_mod
+        time_mod.sleep(1)  # Nominatim вимагає не більше 1 запиту/сек
         url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=10&accept-language=uk"
         req = urllib.request.Request(url, headers={"User-Agent": "FaceLib/1.3"})
-        with urllib.request.urlopen(req, timeout=5) as r:
+        with urllib.request.urlopen(req, timeout=10) as r:
             data = json.loads(r.read())
         addr = data.get("address", {})
         city = (addr.get("city") or addr.get("town") or addr.get("village") or
@@ -686,19 +687,22 @@ def person_places(person_id: int):
             continue
 
         # Читаємо EXIF і кешуємо
-        coords = get_gps_from_exif(ph["path"])
-        if not coords:
-            db.execute("UPDATE photos SET city='', country='' WHERE id=?", (ph["id"],))
+        try:
+            coords = get_gps_from_exif(ph["path"])
+            if not coords:
+                db.execute("UPDATE photos SET city='', country='' WHERE id=?", (ph["id"],))
+                no_location += 1
+                continue
+            geo = reverse_geocode(coords[0], coords[1])
+            city = geo["city"]
+            country = geo["country"]
+            db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, ph["id"]))
+            if city not in city_counts:
+                city_counts[city] = {"city": city, "country": country, "count": 0}
+            city_counts[city]["count"] += 1
+        except Exception:
             no_location += 1
             continue
-
-        geo = reverse_geocode(coords[0], coords[1])
-        city = geo["city"]
-        country = geo["country"]
-        db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, ph["id"]))
-        if city not in city_counts:
-            city_counts[city] = {"city": city, "country": country, "count": 0}
-        city_counts[city]["count"] += 1
 
     db.commit()
     result = sorted(city_counts.values(), key=lambda x: x["count"], reverse=True)
