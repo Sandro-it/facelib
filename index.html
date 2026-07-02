@@ -902,10 +902,9 @@ async function openPerson(p) {
     await fetch('/api/persons/' + p.id + '/places/reset', {method:'POST'});
     refreshCitiesBtn.disabled = false;
     refreshCitiesBtn.innerHTML = '🔄 Оновити';
-    // Перезавантажуємо список без закриття панелі
-    var panel = document.getElementById('placesPanel');
+    // Перезавантажуємо список міст якщо панель є в DOM
     var list = document.getElementById('placesList');
-    if (panel && panel.classList.contains('open') && list) {
+    if (list) {
       list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-dim)">Завантаження...</div>';
       try {
         var r = await fetch('/api/persons/' + p.id + '/places');
