@@ -613,7 +613,7 @@ def reverse_geocode(lat: float, lon: float) -> dict:
         time_mod.sleep(0.5)
         url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=10&accept-language=uk"
         req = urllib.request.Request(url, headers={"User-Agent": "FaceLib/1.3"})
-        with urllib.request.urlopen(req, timeout=10) as r:
+        with urllib.request.urlopen(req, timeout=3) as r:
             data = json.loads(r.read())
         addr = data.get("address", {})
         city = (addr.get("city") or addr.get("town") or addr.get("village") or
