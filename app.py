@@ -627,6 +627,21 @@ def reverse_geocode(lat: float, lon: float) -> dict:
     except Exception:
         return {"city": "Невідомо", "country": ""}
 
+@app.post("/api/persons/{person_id}/places/reset")
+def person_places_reset(person_id: int):
+    """Скидає кеш міст для всіх фото людини."""
+    db = get_db()
+    db.execute("""
+        UPDATE photos SET city=NULL, country=NULL
+        WHERE id IN (
+            SELECT ph.id FROM photos ph
+            JOIN faces f ON f.photo_id = ph.id
+            WHERE f.person_id = ?
+        )
+    """, (person_id,))
+    db.commit()
+    return {"ok": True}
+
 @app.get("/api/persons/{person_id}/places")
 def person_places(person_id: int):
     """Повертає список міст для людини з кількістю фото. Кешує city в photos."""
