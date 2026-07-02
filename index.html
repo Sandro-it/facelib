@@ -890,6 +890,23 @@ async function openPerson(p) {
   placesBtn.innerHTML = '📍 Місця';
   placesBtn.onclick = function() { togglePlaces(p.id); };
   toolbar.appendChild(placesBtn);
+
+  var refreshCitiesBtn = document.createElement('button');
+  refreshCitiesBtn.className = 'gallery-toolbar-btn'; refreshCitiesBtn.id = 'refreshCitiesBtn';
+  refreshCitiesBtn.innerHTML = '🔄 Оновити міста';
+  refreshCitiesBtn.onclick = async function() {
+    refreshCitiesBtn.disabled = true;
+    refreshCitiesBtn.innerHTML = '⏳ Оновлення...';
+    var r = await fetch('/api/persons/' + p.id + '/places/reset', {method:'POST'});
+    var d = await r.json();
+    refreshCitiesBtn.disabled = false;
+    refreshCitiesBtn.innerHTML = '🔄 Оновити міста';
+    if (d.ok) {
+      // Якщо панель відкрита — перезавантажуємо список міст
+      if (placesActive) togglePlaces(p.id);
+    }
+  };
+  toolbar.appendChild(refreshCitiesBtn);
   content.appendChild(toolbar);
 
   // Повідомлення в хедері (біля кнопок злити/видалити)
