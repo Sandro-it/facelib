@@ -616,7 +616,7 @@ def reverse_geocode(lat: float, lon: float) -> dict:
             data = json.loads(r.read())
         addr = data.get("address", {})
         city = (addr.get("city") or addr.get("town") or addr.get("village") or
-                addr.get("suburb") or addr.get("hamlet") or "Невідомо")
+                addr.get("municipality") or addr.get("county") or "Невідомо")
         country = addr.get("country", "")
         db.execute(
             "INSERT OR REPLACE INTO geo_cache(lat_lon, city, country) VALUES(?,?,?)",
