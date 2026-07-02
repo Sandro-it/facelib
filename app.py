@@ -629,8 +629,9 @@ def reverse_geocode(lat: float, lon: float) -> dict:
 
 @app.post("/api/persons/{person_id}/places/reset")
 def person_places_reset(person_id: int):
-    """Скидає кеш міст для всіх фото людини."""
+    """Скидає кеш міст для всіх фото людини + очищає geo_cache для їх координат."""
     db = get_db()
+    # Скидаємо city в photos
     db.execute("""
         UPDATE photos SET city=NULL, country=NULL
         WHERE id IN (
@@ -639,6 +640,8 @@ def person_places_reset(person_id: int):
             WHERE f.person_id = ?
         )
     """, (person_id,))
+    # Очищаємо весь geo_cache щоб Nominatim перезапитався з новими пріоритетами
+    db.execute("DELETE FROM geo_cache")
     db.commit()
     return {"ok": True}
 
