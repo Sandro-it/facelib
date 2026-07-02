@@ -888,7 +888,7 @@ async function openPerson(p) {
   var toolbar = document.createElement('div'); toolbar.className = 'gallery-toolbar'; toolbar.id = 'galleryToolbar';
   var placesBtn = document.createElement('button');
   placesBtn.className = 'gallery-toolbar-btn'; placesBtn.id = 'placesBtn';
-  placesBtn.innerHTML = '📍 Місця';
+  placesBtn.innerHTML = '📍 Де знято';
   placesBtn.onclick = function() { togglePlaces(p.id); };
   toolbar.appendChild(placesBtn);
   content.appendChild(toolbar);
@@ -920,7 +920,7 @@ async function openPerson(p) {
   var placesPanel = document.createElement('div');
   placesPanel.className = 'places-panel'; placesPanel.id = 'placesPanel';
   var placesHeader = document.createElement('div');
-  placesHeader.className = 'places-header'; placesHeader.textContent = 'Місця';
+  placesHeader.className = 'places-header'; placesHeader.textContent = 'Де знято';
   var placesList = document.createElement('div');
   placesList.className = 'places-list'; placesList.id = 'placesList';
   placesPanel.appendChild(placesHeader);
