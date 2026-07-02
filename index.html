@@ -21,7 +21,6 @@
   .dot.active{background:var(--green);animation:pulse 1.2s infinite}
   .dot.cluster{background:var(--orange);animation:pulse 0.8s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-  @keyframes plroll{0%{transform:translateY(0)}100%{transform:translateY(-264px)}}
   main{display:flex;flex:1;overflow:hidden}
 
   /* Sidebar */
@@ -1790,7 +1789,7 @@ async function togglePlaces(personId) {
   placesActive = true;
   btn.classList.add('active');
   panel.classList.add('open');
-  list.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;padding:16px 8px;gap:6px"><span style="font-size:13px">📍</span><div style="width:90px;height:22px;overflow:hidden;border-radius:5px;border:1px solid var(--border);background:var(--surface2);position:relative;flex-shrink:0"><div style="position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(to bottom,var(--surface2),transparent);z-index:2"></div><div style="position:absolute;bottom:0;left:0;right:0;height:5px;background:linear-gradient(to top,var(--surface2),transparent);z-index:2"></div><div style="display:flex;flex-direction:column;animation:plroll 4s linear infinite"><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Київ</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Париж</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Берлін</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Одеса</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Відень</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Рим</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Прага</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Львів</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Барселона</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Варшава</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Стокгольм</div><div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text)">Київ</div></div></div></div>';
+  list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--text-dim)">Завантаження...</div>';
 
   try {
     var r = await fetch('/api/persons/' + personId + '/places');
