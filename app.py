@@ -704,6 +704,7 @@ def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int
 
 
 @app.get("/api/persons/{person_id}/years")
+@app.get("/api/persons/{person_id}/years")
 def person_years(person_id: int):
     """Return all years for a person for timeline."""
     import datetime
