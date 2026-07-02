@@ -893,53 +893,6 @@ async function openPerson(p) {
   placesBtn.innerHTML = '📍 Де знято';
   placesBtn.onclick = function() { togglePlaces(p.id); };
   toolbar.appendChild(placesBtn);
-
-  var refreshCitiesBtn = document.createElement('button');
-  refreshCitiesBtn.className = 'gallery-toolbar-btn'; refreshCitiesBtn.id = 'refreshCitiesBtn';
-  refreshCitiesBtn.innerHTML = '🔄 Оновити';
-  refreshCitiesBtn.onclick = async function() {
-    refreshCitiesBtn.disabled = true;
-    refreshCitiesBtn.innerHTML = '🔄 Оновити';
-    await fetch('/api/persons/' + p.id + '/places/reset', {method:'POST'});
-    refreshCitiesBtn.disabled = false;
-    refreshCitiesBtn.innerHTML = '🔄 Оновити';
-    // Перезавантажуємо список міст якщо панель є в DOM
-    var list = document.getElementById('placesList');
-    if (list) {
-      list.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:16px 8px;gap:6px">
-      <span style="font-size:13px">📍</span>
-      <div style="width:90px;height:22px;overflow:hidden;border-radius:5px;border:1px solid var(--border);background:var(--surface2);position:relative;flex-shrink:0">
-        <div style="position:absolute;top:0;left:0;right:0;height:5px;background:linear-gradient(to bottom,var(--surface2),transparent);z-index:2"></div>
-        <div style="position:absolute;bottom:0;left:0;right:0;height:5px;background:linear-gradient(to top,var(--surface2),transparent);z-index:2"></div>
-        <div style="display:flex;flex-direction:column;animation:plroll 4s linear infinite">
-          ${['Київ','Париж','Берлін','Одеса','Відень','Рим','Прага','Львів','Барселона','Варшава','Стокгольм','Київ'].map(c=>`<div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text);white-space:nowrap;padding:0 4px">${c}</div>`).join('')}
-        </div>
-      </div>
-    </div>`;
-      try {
-        var r = await fetch('/api/persons/' + p.id + '/places');
-        var places = await r.json();
-        list.innerHTML = '';
-        places.forEach(function(pl) {
-          var item = document.createElement('div');
-          item.className = 'place-item';
-          var name = document.createElement('span'); name.className = 'place-name';
-          name.textContent = pl.city; name.title = pl.city + (pl.country ? ', ' + pl.country : '');
-          var cnt = document.createElement('span'); cnt.className = 'place-count'; cnt.textContent = pl.count;
-          item.appendChild(name); item.appendChild(cnt);
-          item.addEventListener('click', function() {
-            document.querySelectorAll('.place-item').forEach(function(i){ i.classList.remove('active'); });
-            item.classList.add('active');
-            loadPlacePhotos(p.id, pl.city);
-          });
-          list.appendChild(item);
-        });
-      } catch(e) {
-        list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--red)">Помилка</div>';
-      }
-    }
-  };
-  toolbar.appendChild(refreshCitiesBtn);
   content.appendChild(toolbar);
 
   // Повідомлення в хедері (біля кнопок злити/видалити)
