@@ -21,6 +21,7 @@
   .dot.active{background:var(--green);animation:pulse 1.2s infinite}
   .dot.cluster{background:var(--orange);animation:pulse 0.8s infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes plroll{0%{transform:translateY(0)}100%{transform:translateY(-264px)}}
   main{display:flex;flex:1;overflow:hidden}
 
   /* Sidebar */
@@ -898,7 +899,7 @@ async function openPerson(p) {
   refreshCitiesBtn.innerHTML = '🔄 Оновити';
   refreshCitiesBtn.onclick = async function() {
     refreshCitiesBtn.disabled = true;
-    refreshCitiesBtn.innerHTML = '⏳...';
+    refreshCitiesBtn.innerHTML = '🔄 Оновити';
     await fetch('/api/persons/' + p.id + '/places/reset', {method:'POST'});
     refreshCitiesBtn.disabled = false;
     refreshCitiesBtn.innerHTML = '🔄 Оновити';
@@ -914,8 +915,7 @@ async function openPerson(p) {
           ${['Київ','Париж','Берлін','Одеса','Відень','Рим','Прага','Львів','Барселона','Варшава','Стокгольм','Київ'].map(c=>`<div style="height:22px;line-height:22px;text-align:center;font-size:11px;color:var(--text);white-space:nowrap;padding:0 4px">${c}</div>`).join('')}
         </div>
       </div>
-    </div>
-    <style>@keyframes plroll{0%{transform:translateY(0)}100%{transform:translateY(-264px)}}</style>`;
+    </div>`;
       try {
         var r = await fetch('/api/persons/' + p.id + '/places');
         var places = await r.json();
