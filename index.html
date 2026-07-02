@@ -848,6 +848,7 @@ function onPersonListScroll(el) {
 
 async function openPerson(p) {
   currentPersonId = p.id;
+  placesActive = false;
   document.querySelectorAll('.person-card').forEach(function(c){ c.classList.toggle('active', +c.dataset.id === p.id); });
   var content = document.getElementById('contentArea');
   content.innerHTML = '';
@@ -1774,16 +1775,13 @@ async function togglePlaces(personId) {
   var list = document.getElementById('placesList');
   if (!btn || !panel) return;
 
-  if (placesActive) {
+  var isOpen = panel && panel.classList.contains('open');
+  if (isOpen) {
     // Закриваємо
     placesActive = false;
     currentPlaceFilter = null;
     btn.classList.remove('active');
     panel.classList.remove('open');
-    // Повертаємо звичайну галерею
-    var person = null;
-    for (var id in allPersonsCache) { if (allPersonsCache[id].id == personId) { person = allPersonsCache[id]; break; } }
-    if (person) openPerson(person);
     return;
   }
 
