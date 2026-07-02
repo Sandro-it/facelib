@@ -629,8 +629,23 @@ def reverse_geocode(lat: float, lon: float) -> dict:
 
 @app.post("/api/persons/{person_id}/places/reset")
 def person_places_reset(person_id: int):
-    """Скидає кеш міст для всіх фото людини + очищає geo_cache для їх координат."""
+    """Скидає кеш міст для фото людини і видаляє відповідні записи з geo_cache."""
     db = get_db()
+    # Отримуємо всі фото людини
+    photos = db.execute("""
+        SELECT ph.path FROM photos ph
+        JOIN faces f ON f.photo_id = ph.id
+        WHERE f.person_id = ?
+        GROUP BY ph.id
+    """, (person_id,)).fetchall()
+
+    # Збираємо унікальні координати і видаляємо їх з geo_cache
+    for ph in photos:
+        coords = get_gps_from_exif(ph["path"])
+        if coords:
+            lat_lon_key = f"{coords[0]},{coords[1]}"
+            db.execute("DELETE FROM geo_cache WHERE lat_lon=?", (lat_lon_key,))
+
     # Скидаємо city в photos
     db.execute("""
         UPDATE photos SET city=NULL, country=NULL
@@ -640,8 +655,6 @@ def person_places_reset(person_id: int):
             WHERE f.person_id = ?
         )
     """, (person_id,))
-    # Очищаємо весь geo_cache щоб Nominatim перезапитався з новими пріоритетами
-    db.execute("DELETE FROM geo_cache")
     db.commit()
     return {"ok": True}
 
