@@ -587,10 +587,11 @@ def get_gps_from_exif(path: str):
     except Exception:
         return None
 
-def reverse_geocode(lat: float, lon: float) -> dict:
+def reverse_geocode(lat: float, lon: float, db=None) -> dict:
     """Отримує назву міста через OpenCage. Кешує результат в БД."""
     lat_lon_key = f"{lat},{lon}"
-    db = get_db()
+    if db is None:
+        db = get_db()
     cached = db.execute("SELECT city, country FROM geo_cache WHERE lat_lon=?", (lat_lon_key,)).fetchone()
     if cached:
         return {"city": cached["city"], "country": cached["country"]}
@@ -651,7 +652,7 @@ def person_places(person_id: int):
             no_location += 1
             continue
 
-        geo = reverse_geocode(coords[0], coords[1])
+        geo = reverse_geocode(coords[0], coords[1], db)
         city = geo["city"]
         country = geo["country"]
         db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, ph["id"]))
