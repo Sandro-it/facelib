@@ -584,10 +584,9 @@ def get_gps_from_exif(path: str):
         lat = to_decimal(gps_info["GPSLatitude"], gps_info.get("GPSLatitudeRef", "N"))
         lon = to_decimal(gps_info["GPSLongitude"], gps_info.get("GPSLongitudeRef", "E"))
         return (round(lat, 4), round(lon, 4))
-    except Exception:
-        return None
-
-def reverse_geocode(lat: float, lon: float, db=None) -> dict:
+    except Exception as e:
+        print(f"GPS ERROR {path}: {e}")
+        return None(lat: float, lon: float, db=None) -> dict:
     """Отримує назву міста через OpenCage. Кешує результат в БД."""
     lat_lon_key = f"{lat},{lon}"
     if db is None:
@@ -615,7 +614,8 @@ def reverse_geocode(lat: float, lon: float, db=None) -> dict:
         )
         db.commit()
         return {"city": city, "country": country}
-    except Exception:
+    except Exception as e:
+        print(f"GEOCODE ERROR {lat},{lon}: {e}")
         return {"city": "Без локації", "country": ""}
 
 @app.get("/api/persons/{person_id}/places")
