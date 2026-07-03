@@ -636,7 +636,7 @@ def person_places(person_id: int):
         if ph["city"] is not None:
             city = ph["city"]
             country = ph["country"] or ""
-            if city == "":
+            if city == "" or city == "Без локації":
                 no_location += 1
             else:
                 if city not in city_counts:
@@ -655,9 +655,12 @@ def person_places(person_id: int):
         city = geo["city"]
         country = geo["country"]
         db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, ph["id"]))
-        if city not in city_counts:
-            city_counts[city] = {"city": city, "country": country, "count": 0}
-        city_counts[city]["count"] += 1
+        if city == "Без локації" or city == "":
+            no_location += 1
+        else:
+            if city not in city_counts:
+                city_counts[city] = {"city": city, "country": country, "count": 0}
+            city_counts[city]["count"] += 1
 
     db.commit()
     result = sorted(city_counts.values(), key=lambda x: x["count"], reverse=True)
