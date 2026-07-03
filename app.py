@@ -588,7 +588,7 @@ def get_gps_from_exif(path: str):
         return None
 
 def reverse_geocode(lat: float, lon: float) -> dict:
-    """Отримує назву міста через Nominatim. Кешує результат в БД."""
+    """Отримує назву міста через OpenCage. Кешує результат в БД."""
     lat_lon_key = f"{lat},{lon}"
     db = get_db()
     cached = db.execute("SELECT city, country FROM geo_cache WHERE lat_lon=?", (lat_lon_key,)).fetchone()
@@ -596,14 +596,18 @@ def reverse_geocode(lat: float, lon: float) -> dict:
         return {"city": cached["city"], "country": cached["country"]}
     try:
         import urllib.request
-        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json&zoom=10&accept-language=uk"
+        api_key = "e7fb3bae53994b00b645934e3d63d273"
+        url = f"https://api.opencagedata.com/geocode/v1/json?q={lat}+{lon}&key={api_key}&language=uk&limit=1&no_annotations=1"
         req = urllib.request.Request(url, headers={"User-Agent": "FaceLib/1.3"})
         with urllib.request.urlopen(req, timeout=5) as r:
             data = json.loads(r.read())
-        addr = data.get("address", {})
-        city = (addr.get("city") or addr.get("town") or addr.get("village") or
-                addr.get("municipality") or addr.get("county") or "Невідомо")
-        country = addr.get("country", "")
+        results = data.get("results", [])
+        if not results:
+            return {"city": "Без локації", "country": ""}
+        comp = results[0].get("components", {})
+        city = (comp.get("city") or comp.get("town") or comp.get("village") or
+                comp.get("suburb") or comp.get("hamlet") or "Без локації")
+        country = comp.get("country", "")
         db.execute(
             "INSERT OR REPLACE INTO geo_cache(lat_lon, city, country) VALUES(?,?,?)",
             (lat_lon_key, city, country)
@@ -611,7 +615,7 @@ def reverse_geocode(lat: float, lon: float) -> dict:
         db.commit()
         return {"city": city, "country": country}
     except Exception:
-        return {"city": "Невідомо", "country": ""}
+        return {"city": "Без локації", "country": ""}
 
 @app.get("/api/persons/{person_id}/places")
 def person_places(person_id: int):
