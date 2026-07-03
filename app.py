@@ -586,7 +586,9 @@ def get_gps_from_exif(path: str):
         return (round(lat, 4), round(lon, 4))
     except Exception as e:
         print(f"GPS ERROR {path}: {e}")
-        return None(lat: float, lon: float, db=None) -> dict:
+        return None
+
+def reverse_geocode(lat: float, lon: float, db=None) -> dict:
     """Отримує назву міста через OpenCage. Кешує результат в БД."""
     lat_lon_key = f"{lat},{lon}"
     if db is None:
