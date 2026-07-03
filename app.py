@@ -585,7 +585,8 @@ def get_gps_from_exif(path: str):
         lon = to_decimal(gps_info["GPSLongitude"], gps_info.get("GPSLongitudeRef", "E"))
         return (round(lat, 4), round(lon, 4))
     except Exception as e:
-        print(f"GPS ERROR {path}: {e}")
+        with open("gps_errors.log", "a", encoding="utf-8") as f:
+            f.write(f"GPS ERROR {path}: {e}\n")
         return None
 
 def reverse_geocode(lat: float, lon: float, db=None) -> dict:
@@ -617,7 +618,8 @@ def reverse_geocode(lat: float, lon: float, db=None) -> dict:
         db.commit()
         return {"city": city, "country": country}
     except Exception as e:
-        print(f"GEOCODE ERROR {lat},{lon}: {e}")
+        with open("gps_errors.log", "a", encoding="utf-8") as f:
+            f.write(f"GEOCODE ERROR {lat},{lon}: {e}\n")
         return {"city": "Без локації", "country": ""}
 
 @app.get("/api/persons/{person_id}/places")
