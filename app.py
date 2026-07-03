@@ -596,7 +596,7 @@ def reverse_geocode(lat: float, lon: float) -> dict:
         return {"city": cached["city"], "country": cached["country"]}
     try:
         import urllib.request
-        api_key = "e7fb3bae53994b00b645934e3d63d273"
+        api_key = "e7fb30ae53994b00b64b934e3d63d273"
         url = f"https://api.opencagedata.com/geocode/v1/json?q={lat}+{lon}&key={api_key}&language=uk&limit=1&no_annotations=1"
         req = urllib.request.Request(url, headers={"User-Agent": "FaceLib/1.3"})
         with urllib.request.urlopen(req, timeout=5) as r:
