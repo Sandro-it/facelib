@@ -654,7 +654,15 @@ async function loadPersons(highlightIds) {
   var countD = await countR.json();
   document.getElementById('personCount').textContent = countD.count.toLocaleString();
   list.innerHTML = '';
-  await loadMorePersons(highlightIds);
+  // При пошуку за фото — завантажуємо більший батч щоб всі збіги потрапили
+  if (highlightIds && Object.keys(highlightIds).length > 0) {
+    var oldBatch = personsBatchSize;
+    personsBatchSize = 500;
+    await loadMorePersons(highlightIds);
+    personsBatchSize = oldBatch;
+  } else {
+    await loadMorePersons(highlightIds);
+  }
 }
 
 async function loadMorePersons(highlightIds) {
