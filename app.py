@@ -903,7 +903,7 @@ async def search_by_face(file: UploadFile = File(...)):
         pid = row["person_id"]
         if pid not in scores or scores[pid] < sim:
             scores[pid] = sim
-    matched = sorted([(pid, sim) for pid, sim in scores.items() if sim >= 0.45], key=lambda x: -x[1])[:5]
+    matched = sorted([(pid, sim) for pid, sim in scores.items() if sim >= 0.45], key=lambda x: -x[1])[:50]
     persons = list_persons()
     pid_map = {p["id"]: p for p in persons}
     result = []
