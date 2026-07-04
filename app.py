@@ -14,7 +14,7 @@ import uvicorn
 app = FastAPI(title="FaceLib")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-VERSION = "1.2"
+VERSION = "1.3"
 GITHUB_REPO = "Sandro-it/facelib"
 
 DB_PATH = "facelib.db"
@@ -73,6 +73,12 @@ def init_db():
             path TEXT UNIQUE NOT NULL,
             enabled INTEGER DEFAULT 1
         );
+        CREATE TABLE IF NOT EXISTS geo_cache (
+            lat_lon TEXT PRIMARY KEY,
+            city TEXT,
+            country TEXT,
+            cached_at REAL DEFAULT (unixepoch())
+        );
         CREATE INDEX IF NOT EXISTS idx_faces_person ON faces(person_id);
         CREATE INDEX IF NOT EXISTS idx_faces_photo ON faces(photo_id);
         CREATE INDEX IF NOT EXISTS idx_faces_person_photo ON faces(person_id, photo_id);
@@ -94,6 +100,21 @@ def ensure_migrations():
             conn.execute("ALTER TABLE persons ADD COLUMN is_favorite INTEGER DEFAULT 0")
         if 'sort_order' not in cols:
             conn.execute("ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
+        # Add geo_cache table if not exists
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS geo_cache (
+                lat_lon TEXT PRIMARY KEY,
+                city TEXT,
+                country TEXT,
+                cached_at REAL DEFAULT (unixepoch())
+            )
+        """)
+        # Add city column to photos for caching
+        photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]
+        if 'city' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN city TEXT")
+        if 'country' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN country TEXT")
 
 try:
     ensure_indexes()
@@ -532,6 +553,171 @@ def get_person(person_id: int):
     return {"id": r["id"], "name": r["name"], "photo_count": r["photo_count"],
             "cover_url": cover_url, "is_favorite": bool(r["is_favorite"]), "sort_order": r["sort_order"]}
 
+# ---------------------------------------------------------------------------
+# Places / GPS
+# ---------------------------------------------------------------------------
+
+def get_gps_from_exif(path: str):
+    """Зчитує GPS координати з EXIF фото. Повертає (lat, lon) або None."""
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS, GPSTAGS
+        img = Image.open(path)
+        exif_data = img._getexif()
+        if not exif_data:
+            return None
+        gps_info = {}
+        for tag_id, value in exif_data.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == "GPSInfo":
+                for gps_tag_id, gps_value in value.items():
+                    gps_tag = GPSTAGS.get(gps_tag_id, gps_tag_id)
+                    gps_info[gps_tag] = gps_value
+        if not gps_info or "GPSLatitude" not in gps_info:
+            return None
+        def to_decimal(coord, ref):
+            d, m, s = coord
+            decimal = float(d) + float(m) / 60 + float(s) / 3600
+            if ref in ('S', 'W'):
+                decimal = -decimal
+            return decimal
+        lat = to_decimal(gps_info["GPSLatitude"], gps_info.get("GPSLatitudeRef", "N"))
+        lon = to_decimal(gps_info["GPSLongitude"], gps_info.get("GPSLongitudeRef", "E"))
+        return (round(lat, 4), round(lon, 4))
+    except Exception as e:
+        with open("gps_errors.log", "a", encoding="utf-8") as f:
+            f.write(f"GPS ERROR {path}: {e}\n")
+        return None
+
+def reverse_geocode(lat: float, lon: float, db=None) -> dict:
+    """Отримує назву міста через OpenCage. Кешує результат в БД."""
+    lat_lon_key = f"{lat},{lon}"
+    if db is None:
+        db = get_db()
+    cached = db.execute("SELECT city, country FROM geo_cache WHERE lat_lon=?", (lat_lon_key,)).fetchone()
+    if cached:
+        return {"city": cached["city"], "country": cached["country"]}
+    try:
+        import urllib.request, ssl
+        api_key = "e7fb30ae53994b00b64b934e3d63d273"
+        url = f"https://api.opencagedata.com/geocode/v1/json?q={lat}+{lon}&key={api_key}&language=uk&limit=1&no_annotations=1"
+        req = urllib.request.Request(url, headers={"User-Agent": "FaceLib/1.3"})
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        with urllib.request.urlopen(req, timeout=5, context=ctx) as r:
+            data = json.loads(r.read())
+        results = data.get("results", [])
+        if not results:
+            return {"city": "Без локації", "country": ""}
+        comp = results[0].get("components", {})
+        city = (comp.get("city") or comp.get("town") or comp.get("village") or
+                comp.get("suburb") or comp.get("hamlet") or "Без локації")
+        country = comp.get("country", "")
+        db.execute(
+            "INSERT OR REPLACE INTO geo_cache(lat_lon, city, country) VALUES(?,?,?)",
+            (lat_lon_key, city, country)
+        )
+        db.commit()
+        return {"city": city, "country": country}
+    except Exception as e:
+        with open("gps_errors.log", "a", encoding="utf-8") as f:
+            f.write(f"GEOCODE ERROR {lat},{lon}: {e}\n")
+        return {"city": "Без локації", "country": ""}
+
+@app.get("/api/persons/{person_id}/places")
+def person_places(person_id: int):
+    """Повертає список міст для людини з кількістю фото. Кешує city в photos."""
+    db = get_db()
+    photos = db.execute("""
+        SELECT ph.id, ph.path, ph.city, ph.country FROM photos ph
+        JOIN faces f ON f.photo_id = ph.id
+        WHERE f.person_id = ?
+        GROUP BY ph.id
+    """, (person_id,)).fetchall()
+
+    city_counts = {}
+    no_location = 0
+
+    for ph in photos:
+        # Якщо city вже закешовано в БД — використовуємо його
+        if ph["city"] is not None:
+            city = ph["city"]
+            country = ph["country"] or ""
+            if city == "" or city == "Без локації":
+                no_location += 1
+            else:
+                if city not in city_counts:
+                    city_counts[city] = {"city": city, "country": country, "count": 0}
+                city_counts[city]["count"] += 1
+            continue
+
+        # Читаємо EXIF і кешуємо
+        coords = get_gps_from_exif(ph["path"])
+        if not coords:
+            db.execute("UPDATE photos SET city='', country='' WHERE id=?", (ph["id"],))
+            no_location += 1
+            continue
+
+        geo = reverse_geocode(coords[0], coords[1], db)
+        city = geo["city"]
+        country = geo["country"]
+        db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, ph["id"]))
+        if city == "Без локації" or city == "":
+            no_location += 1
+        else:
+            if city not in city_counts:
+                city_counts[city] = {"city": city, "country": country, "count": 0}
+            city_counts[city]["count"] += 1
+
+    db.commit()
+    result = sorted(city_counts.values(), key=lambda x: x["count"], reverse=True)
+    if no_location > 0:
+        result.append({"city": "Без локації", "country": "", "count": no_location})
+    return result
+
+@app.get("/api/persons/{person_id}/places/{city}/photos")
+def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int = 0):
+    """Повертає фото людини з конкретного міста — використовує кеш з БД."""
+    import os, time as time_mod
+    db = get_db()
+
+    if city == "Без локації":
+        rows = db.execute("""
+            SELECT ph.id, ph.path, ph.taken_at FROM photos ph
+            JOIN faces f ON f.photo_id = ph.id
+            WHERE f.person_id = ? AND (ph.city = '' OR ph.city IS NULL)
+            GROUP BY ph.id
+            ORDER BY ph.taken_at DESC
+            LIMIT ? OFFSET ?
+        """, (person_id, limit, offset)).fetchall()
+    else:
+        rows = db.execute("""
+            SELECT ph.id, ph.path, ph.taken_at FROM photos ph
+            JOIN faces f ON f.photo_id = ph.id
+            WHERE f.person_id = ? AND ph.city = ?
+            GROUP BY ph.id
+            ORDER BY ph.taken_at DESC
+            LIMIT ? OFFSET ?
+        """, (person_id, city, limit, offset)).fetchall()
+
+    result = []
+    for r in rows:
+        year = None
+        if r["taken_at"]:
+            try:
+                year = time_mod.gmtime(r["taken_at"]).tm_year
+            except Exception:
+                pass
+        result.append({
+            "id": r["id"],
+            "path": r["path"],
+            "thumb": make_photo_thumb(r["path"], r["id"]),
+            "year": year
+        })
+    return result
+
+
 @app.get("/api/persons/{person_id}/years")
 def person_years(person_id: int):
     """Return all years for a person for timeline."""
@@ -717,7 +903,7 @@ async def search_by_face(file: UploadFile = File(...)):
         pid = row["person_id"]
         if pid not in scores or scores[pid] < sim:
             scores[pid] = sim
-    matched = sorted([(pid, sim) for pid, sim in scores.items() if sim >= 0.45], key=lambda x: -x[1])[:5]
+    matched = sorted([(pid, sim) for pid, sim in scores.items() if sim >= 0.45], key=lambda x: -x[1])[:50]
     persons = list_persons()
     pid_map = {p["id"]: p for p in persons}
     result = []
