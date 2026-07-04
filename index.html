@@ -1806,31 +1806,9 @@ async function togglePlaces(personId) {
     currentPlaceFilter = null;
     btn.classList.remove('active');
     panel.classList.remove('open');
-    // Повертаємо звичайну галерею якщо було вибране місто
-    var grid = document.getElementById('photoGrid');
-    if (grid) {
-      currentPhotos = [];
-      lastRenderedYear = null;
-      if (currentAbort) currentAbort.abort();
-      // Перезавантажуємо фото для поточної людини
-      var pid = currentPersonId;
-      if (pid) {
-        grid.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Завантаження...</p></div>';
-        fetch('/api/persons/' + pid + '/years').then(function(r){ return r.json(); }).then(function(years){
-          updateTimeline(years);
-          allYearsOriginal = years;
-          if (years.length > 0) {
-            return fetch('/api/persons/' + pid + '/photos?year=' + years[0] + '&limit=50');
-          } else {
-            return fetch('/api/persons/' + pid + '/photos?limit=50');
-          }
-        }).then(function(r){ return r.json(); }).then(function(photos){
-          grid.innerHTML = '';
-          lastRenderedYear = null;
-          photos.forEach(function(ph, i){ currentPhotos.push(ph); appendPhotoCard(ph, i, grid); });
-        }).catch(function(){ grid.innerHTML = ''; });
-      }
-    }
+    // Повертаємо звичайну галерею
+    var person = allPersonsCache[currentPersonId];
+    if (person) openPerson(person);
     return;
   }
 
