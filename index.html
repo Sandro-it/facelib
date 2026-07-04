@@ -1740,12 +1740,13 @@ async function initVersion() {
     var d = await r.json();
     var badge = document.getElementById('versionBadge');
     if (badge) badge.textContent = 'v' + d.version;
-    // Перевіряємо оновлення у фоні
-    checkUpdateSilent();
   } catch(e) {}
 }
 
+var updateChecked = false;
 async function checkUpdateSilent() {
+  if (updateChecked) return;
+  updateChecked = true;
   try {
     var r = await fetch('/api/check-update');
     var d = await r.json();
@@ -1784,6 +1785,7 @@ initVersion();
 loadFolders();
 fetchStatus();
 setInterval(fetchStatus, 2000);
+checkUpdateSilent();
 
 // ---------------------------------------------------------------------------
 // Places
