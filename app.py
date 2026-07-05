@@ -733,10 +733,27 @@ def person_years(person_id: int):
     return [r["year"] for r in rows if r["year"]]
 
 @app.get("/api/persons/{person_id}/photos")
-def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int = None):
+def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int = None,
+                   date_from: str = None, date_to: str = None):
     import datetime
     db = get_db()
-    if year:
+    if date_from or date_to:
+        try:
+            ts_from = datetime.datetime.strptime(date_from, "%Y-%m-%d").timestamp() if date_from else 0
+        except ValueError:
+            ts_from = 0
+        try:
+            ts_to = (datetime.datetime.strptime(date_to, "%Y-%m-%d") + datetime.timedelta(days=1)).timestamp() - 1 if date_to else time.time()
+        except ValueError:
+            ts_to = time.time()
+        rows = db.execute("""
+            SELECT DISTINCT ph.id, ph.path, ph.taken_at FROM photos ph
+            JOIN faces f ON f.photo_id = ph.id
+            WHERE f.person_id = ? AND ph.taken_at BETWEEN ? AND ?
+            ORDER BY ph.taken_at DESC
+            LIMIT ? OFFSET ?
+        """, (person_id, ts_from, ts_to, limit, offset)).fetchall()
+    elif year:
         year_start = datetime.datetime(year, 1, 1).timestamp()
         year_end = datetime.datetime(year, 12, 31, 23, 59, 59).timestamp()
         rows = db.execute("""
