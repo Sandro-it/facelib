@@ -931,6 +931,43 @@ async def search_by_face(file: UploadFile = File(...)):
             result.append(p)
     return {"persons": result}
 
+@app.get("/api/photo/info")
+def photo_info(path: str):
+    """Повертає розмір файлу, GPS і місто (кешоване або пораховане на льоту) для однієї фотографії."""
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        size = None
+
+    db = get_db()
+    row = db.execute("SELECT id, city, country, taken_at FROM photos WHERE path=?", (path,)).fetchone()
+
+    city = row["city"] if row else None
+    country = row["country"] if row else None
+    gps = get_gps_from_exif(path)
+
+    if row and city is None:
+        # Ще не кешовано (як і в /places) — рахуємо і зберігаємо
+        if gps:
+            geo = reverse_geocode(gps[0], gps[1], db)
+            city = geo["city"]
+            country = geo["country"]
+        else:
+            city = ""
+            country = ""
+        db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, row["id"]))
+        db.commit()
+
+    return {
+        "name": os.path.basename(path),
+        "path": path,
+        "size": size,
+        "taken_at": row["taken_at"] if row else None,
+        "gps": {"lat": gps[0], "lon": gps[1]} if gps else None,
+        "city": city if city not in (None, "", "Без локації") else None,
+        "country": country or None,
+    }
+
 @app.get("/api/photo/image")
 def photo_image(path: str):
     from fastapi.responses import FileResponse
