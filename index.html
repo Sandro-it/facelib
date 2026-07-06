@@ -1891,6 +1891,11 @@ function toggleDateFilter(personId) {
     if (!dateFilterActive) btn.classList.remove('active');
     return;
   }
+  // Фільтр вже застосований — одне натискання одразу скидає, без відкриття попапу
+  if (dateFilterActive) {
+    resetDateFilter();
+    return;
+  }
   // Закриваємо панель "Де знято", якщо відкрита
   var placesPanel = document.getElementById('placesPanel');
   var placesBtnEl = document.getElementById('placesBtn');
