@@ -433,6 +433,33 @@ async function shareSelectedPhotos() {
   }
 }
 
+async function saveSelectedToFolder() {
+  if (!selectedPhotoIds.size) return;
+  if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_folder && window.pywebview.api.copy_files_to_folder)) {
+    toastHeader('Функція доступна тільки в десктопній версії', 'error');
+    return;
+  }
+  var folderRes = await window.pywebview.api.choose_folder();
+  if (!folderRes || !folderRes.ok) {
+    if (!folderRes || !folderRes.cancelled) {
+      toastHeader('Помилка вибору папки' + (folderRes && folderRes.error ? ': ' + folderRes.error : ''), 'error');
+    }
+    return;
+  }
+  var paths = Array.from(selectedPhotoIds).map(function(id) {
+    var ph = currentPhotos.find(function(p){ return p.id === id; });
+    return ph ? ph.path : null;
+  }).filter(Boolean);
+  if (!paths.length) return;
+  toastHeader('Копіювання...', 'info');
+  var res = await window.pywebview.api.copy_files_to_folder(paths, folderRes.folder);
+  if (res && res.ok) {
+    toastHeader('💾 Скопійовано ' + res.copied + ' з ' + res.total + ' фото', 'success');
+  } else {
+    toastHeader('Помилка: ' + (res ? res.error : 'невідома'), 'error');
+  }
+}
+
 async function removeSelectedPhotos() {
   if (!selectedPhotoIds.size) return;
   var ids = Array.from(selectedPhotoIds);
@@ -994,9 +1021,11 @@ async function openPerson(p) {
   removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
   var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
+  var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
+  saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
   var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
   cancelSelBtn.onclick = function(){ clearSelection(); };
-  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(cancelSelBtn);
+  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
 
   galleryWrap.appendChild(grid);
   galleryWrap.appendChild(selBar);
