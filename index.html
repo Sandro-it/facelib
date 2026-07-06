@@ -134,11 +134,13 @@
   .gallery-toolbar-btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:4px;transition:all .15s;white-space:nowrap}
   .gallery-toolbar-btn:hover{background:var(--surface2);color:var(--text)}
   .gallery-toolbar-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
-  .date-filter-popover{display:none;align-items:center;gap:6px}
+  .date-filter-wrap{position:relative;display:inline-flex}
+  .date-filter-popover{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:20;flex-direction:column;gap:8px;min-width:210px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
   .date-filter-popover.open{display:flex}
   .date-filter-popover label{font-size:11px;color:var(--text-dim)}
-  .date-filter-popover input[type=date]{height:28px;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;color-scheme:dark}
-  .date-filter-popover .btn{height:28px;padding:0 10px;font-size:12px}
+  .date-filter-popover input[type=date]{height:28px;width:100%;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;color-scheme:dark}
+  .date-filter-popover .df-actions{display:flex;gap:6px;margin-top:2px}
+  .date-filter-popover .df-actions .btn{height:28px;padding:0 10px;font-size:12px;flex:1}
   .gallery-wrap{flex:1;display:flex;overflow:hidden}
   .places-panel{width:0;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);overflow:hidden;transition:width .2s ease;display:flex;flex-direction:column}
   .places-panel.open{width:148px}
@@ -925,20 +927,24 @@ async function openPerson(p) {
   placesBtn.onclick = function() { togglePlaces(p.id); };
   toolbar.appendChild(placesBtn);
 
+  var dateWrap = document.createElement('div'); dateWrap.className = 'date-filter-wrap';
   var dateBtn = document.createElement('button');
   dateBtn.className = 'gallery-toolbar-btn'; dateBtn.id = 'dateFilterBtn';
   dateBtn.innerHTML = '📅 Дата';
   dateBtn.onclick = function() { toggleDateFilter(p.id); };
-  toolbar.appendChild(dateBtn);
+  dateWrap.appendChild(dateBtn);
 
   var datePopover = document.createElement('div');
   datePopover.className = 'date-filter-popover'; datePopover.id = 'dateFilterPopover';
   datePopover.innerHTML =
     '<label>Від</label><input type="date" id="dateFromInput">' +
     '<label>До</label><input type="date" id="dateToInput">' +
-    '<button class="btn btn-primary" id="dateApplyBtn">Застосувати</button>' +
-    '<button class="btn btn-secondary" id="dateResetBtn">Скинути</button>';
-  toolbar.appendChild(datePopover);
+    '<div class="df-actions">' +
+      '<button class="btn btn-primary" id="dateApplyBtn">Застосувати</button>' +
+      '<button class="btn btn-secondary" id="dateResetBtn">Скинути</button>' +
+    '</div>';
+  dateWrap.appendChild(datePopover);
+  toolbar.appendChild(dateWrap);
   content.appendChild(toolbar);
   datePopover.querySelector('#dateApplyBtn').onclick = function() { applyDateFilter(p.id); };
   datePopover.querySelector('#dateResetBtn').onclick = function() { resetDateFilter(); };
@@ -1912,6 +1918,17 @@ function toggleDateFilter(personId) {
   popover.classList.add('open');
   btn.classList.add('active');
 }
+
+document.addEventListener('click', function(e) {
+  var wrap = document.querySelector('.date-filter-wrap');
+  if (!wrap || wrap.contains(e.target)) return;
+  var popover = document.getElementById('dateFilterPopover');
+  var btn = document.getElementById('dateFilterBtn');
+  if (popover && popover.classList.contains('open')) {
+    popover.classList.remove('open');
+    if (!dateFilterActive && btn) btn.classList.remove('active');
+  }
+});
 
 function applyDateFilter(personId) {
   var fromInput = document.getElementById('dateFromInput');
