@@ -71,6 +71,10 @@
   .person-list::-webkit-scrollbar{width:4px}
   .person-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
   .person-card{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:var(--radius);cursor:pointer;transition:background .15s;position:relative;overflow:hidden}
+  .tag-dots{position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);display:flex;gap:2px;background:rgba(0,0,0,.4);border-radius:6px;padding:1.5px 3px}
+  .tag-filter-chip{font-size:11px;padding:3px 10px;border-radius:12px;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+  .tag-filter-chip.active{background:var(--accent-dim);border-color:var(--accent)}
+  .tag-filter-add{border-style:dashed;color:var(--text-dim)}
   .person-card:hover{background:var(--surface2)}
   .person-card.active{background:var(--accent-dim)}
   .person-avatar{width:42px;height:42px;border-radius:50%;object-fit:cover;background:var(--surface2);flex-shrink:0;border:2px solid var(--border)}
@@ -279,6 +283,7 @@
           <input class="folder-input" id="personSearch" placeholder="🔍 Пошук за ім'ям..." style="width:100%;font-size:12px;padding-right:26px" oninput="onPersonSearch(this.value)">
           <button onclick="clearPersonSearch()" id="personSearchClear" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px" title="Очистити">✕</button>
         </div>
+        <div id="tagFilterRow" style="padding:0 8px 6px;display:flex;flex-wrap:wrap;gap:5px"></div>
         <div class="person-list" id="personList" onscroll="onPersonListScroll(this)"></div>
       </div>
     </aside>
@@ -686,6 +691,48 @@ var personsBatchSize = 80;
 var personsAllLoaded = false;
 var personsSearchQuery = '';
 var personsLoading = false;
+var currentTagFilter = null;
+
+async function renderTagFilterRow() {
+  var row = document.getElementById('tagFilterRow');
+  if (!row) return;
+  var r = await fetch('/api/tags');
+  var tags = await r.json();
+  window._allTags = tags; // кеш для попапу тегів людини
+
+  var allChip = document.createElement('span');
+  allChip.className = 'tag-filter-chip' + (!currentTagFilter ? ' active' : '');
+  allChip.textContent = 'Усі';
+  allChip.onclick = function() { currentTagFilter = null; renderTagFilterRow(); loadPersons(null); };
+
+  var chips = [allChip];
+  tags.forEach(function(t) {
+    var chip = document.createElement('span');
+    chip.className = 'tag-filter-chip' + (currentTagFilter === t.id ? ' active' : '');
+    chip.textContent = t.name;
+    if (currentTagFilter === t.id) { chip.style.background = t.color; chip.style.borderColor = t.color; }
+    chip.onclick = function() {
+      currentTagFilter = (currentTagFilter === t.id ? null : t.id);
+      renderTagFilterRow(); loadPersons(null);
+    };
+    chips.push(chip);
+  });
+
+  var addChip = document.createElement('span');
+  addChip.className = 'tag-filter-chip tag-filter-add';
+  addChip.textContent = '+';
+  addChip.title = 'Створити новий тег';
+  addChip.onclick = async function() {
+    var name = window.prompt('Назва нового тега:');
+    if (!name || !name.trim()) return;
+    await fetch('/api/tags', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: name.trim()})});
+    renderTagFilterRow();
+  };
+  chips.push(addChip);
+
+  row.innerHTML = '';
+  chips.forEach(function(c) { row.appendChild(c); });
+}
 
 async function loadPersons(highlightIds) {
   if (highlightIds === null && currentHighlightIds) {
@@ -697,7 +744,9 @@ async function loadPersons(highlightIds) {
   var list = document.getElementById('personList');
   list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)"><div class="spinner" style="margin:0 auto"></div></div>';
   // Get count
-  var countR = await fetch('/api/persons/count?search=' + encodeURIComponent(personsSearchQuery));
+  var countUrl = '/api/persons/count?search=' + encodeURIComponent(personsSearchQuery);
+  if (currentTagFilter) countUrl += '&tag_id=' + currentTagFilter;
+  var countR = await fetch(countUrl);
   var countD = await countR.json();
   document.getElementById('personCount').textContent = countD.count.toLocaleString();
   list.innerHTML = '';
@@ -717,6 +766,7 @@ async function loadMorePersons(highlightIds) {
   personsLoading = true;
   var url = '/api/persons?limit=' + personsBatchSize + '&offset=' + personsOffset + '&sort=' + personsSort;
   if (personsSearchQuery) url += '&search=' + encodeURIComponent(personsSearchQuery);
+  if (currentTagFilter) url += '&tag_id=' + currentTagFilter;
   var r = await fetch(url);
   var persons = await r.json();
   if (persons.length < personsBatchSize) personsAllLoaded = true;
@@ -785,6 +835,19 @@ async function loadMorePersons(highlightIds) {
     if (p.cover_url) { avatar = document.createElement('img'); avatar.className = 'person-avatar'; avatar.src = p.cover_url; }
     else { avatar = document.createElement('div'); avatar.className = 'person-avatar-ph'; avatar.textContent = '👤'; }
 
+    var avatarWrap = document.createElement('div'); avatarWrap.style.cssText = 'position:relative;flex-shrink:0';
+    avatarWrap.appendChild(avatar);
+    if (p.tags && p.tags.length) {
+      var dotsWrap = document.createElement('div'); dotsWrap.className = 'tag-dots';
+      dotsWrap.title = p.tags.map(function(t){ return t.name; }).join(', ');
+      p.tags.forEach(function(t) {
+        var dot = document.createElement('span');
+        dot.style.cssText = 'width:6px;height:6px;border-radius:50%;background:' + t.color + ';display:block';
+        dotsWrap.appendChild(dot);
+      });
+      avatarWrap.appendChild(dotsWrap);
+    }
+
     var info = document.createElement('div'); info.className = 'person-info';
     var nameEl = document.createElement('div');
     nameEl.className = 'person-name' + (!p.name ? ' unnamed' : '');
@@ -795,7 +858,7 @@ async function loadMorePersons(highlightIds) {
     else { subEl.className = 'person-sub'; subEl.textContent = p.photo_count + ' фото'; }
     info.appendChild(nameEl); info.appendChild(subEl);
 
-    card.appendChild(avatar); card.appendChild(info);
+    card.appendChild(avatarWrap); card.appendChild(info);
 
     // Action buttons (з'являються при hover) + зірочка
     var actions = document.createElement('div');
@@ -955,6 +1018,26 @@ async function openPerson(p) {
   notePopover.querySelector('#noteSaveBtn').onclick = function() { saveNote(p.id); };
   notePopover.querySelector('#noteCloseBtn').onclick = function() { closeNotePopover(); };
 
+  var tagWrap = document.createElement('div'); tagWrap.className = 'date-filter-wrap';
+  var tagBtn = document.createElement('button');
+  tagBtn.className = 'gallery-toolbar-btn'; tagBtn.id = 'tagBtn';
+  tagBtn.innerHTML = '🏷️'; tagBtn.title = 'Теги людини';
+  tagBtn.style.cssText = 'font-size:12px;padding:5px 10px';
+  tagBtn.onclick = function() { toggleTagPopover(p.id); };
+  var tagPopover = document.createElement('div');
+  tagPopover.className = 'date-filter-popover'; tagPopover.id = 'tagPopover';
+  tagPopover.style.minWidth = '230px';
+  tagPopover.innerHTML =
+    '<label>Теги цієї людини</label>' +
+    '<div id="personTagsChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>' +
+    '<label>Додати наявний</label>' +
+    '<div id="availableTagsChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>' +
+    '<input type="text" id="newTagInput" placeholder="Або створити новий..." style="width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;box-sizing:border-box">';
+  tagWrap.appendChild(tagBtn); tagWrap.appendChild(tagPopover);
+  tagPopover.querySelector('#newTagInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); createAndAssignTag(p.id, this.value); this.value = ''; }
+  });
+
   var actions = document.createElement('div'); actions.className = 'header-actions';
   var mergeBtn = document.createElement('button'); mergeBtn.className = 'btn btn-secondary';
   mergeBtn.textContent = '🔗 Злити'; mergeBtn.style.fontSize = '12px'; mergeBtn.style.padding = '5px 10px';
@@ -972,9 +1055,10 @@ async function openPerson(p) {
   var hdrMsg = document.createElement('span'); hdrMsg.id = 'hdrMsg';
   hdrMsg.style.cssText = 'font-size:12px;font-weight:600;opacity:0;transition:opacity .25s;white-space:nowrap';
 
-  hdr.appendChild(h2); hdr.appendChild(nameWrap); hdr.appendChild(noteWrap); hdr.appendChild(cnt); hdr.appendChild(hdrMsg); hdr.appendChild(actions);
+  hdr.appendChild(h2); hdr.appendChild(nameWrap); hdr.appendChild(noteWrap); hdr.appendChild(tagWrap); hdr.appendChild(cnt); hdr.appendChild(hdrMsg); hdr.appendChild(actions);
   content.appendChild(hdr);
   loadNoteIndicator(p.id);
+  loadTagIndicator(p.id);
 
   // Toolbar під хедером
   var toolbar = document.createElement('div'); toolbar.className = 'gallery-toolbar'; toolbar.id = 'galleryToolbar';
@@ -1933,6 +2017,7 @@ async function checkAndUpdate() {
 
 initVersion();
 loadFolders();
+renderTagFilterRow();
 fetchStatus();
 setInterval(fetchStatus, 2000);
 checkUpdateSilent();
@@ -2051,6 +2136,99 @@ async function saveNote(personId) {
   }
 }
 
+async function loadTagIndicator(personId) {
+  var btn = document.getElementById('tagBtn');
+  if (!btn) return;
+  try {
+    var r = await fetch('/api/persons/' + personId + '/tags');
+    var tags = await r.json();
+    btn.dataset.count = tags.length;
+    btn.classList.toggle('active', tags.length > 0);
+  } catch (e) { /* тихо ігноруємо */ }
+}
+
+function closeTagPopover() {
+  var popover = document.getElementById('tagPopover');
+  var btn = document.getElementById('tagBtn');
+  if (popover) popover.classList.remove('open');
+  if (btn) btn.classList.toggle('active', parseInt(btn.dataset.count || '0') > 0);
+}
+
+async function toggleTagPopover(personId) {
+  var popover = document.getElementById('tagPopover');
+  var btn = document.getElementById('tagBtn');
+  if (!popover || !btn) return;
+  if (popover.classList.contains('open')) { closeTagPopover(); return; }
+  popover.classList.add('open');
+  btn.classList.add('active');
+  await renderTagPopoverContent(personId);
+}
+
+async function renderTagPopoverContent(personId) {
+  var chipsWrap = document.getElementById('personTagsChips');
+  var availWrap = document.getElementById('availableTagsChips');
+  if (!chipsWrap || !availWrap) return;
+  chipsWrap.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">Завантаження...</span>';
+  var r = await fetch('/api/persons/' + personId + '/tags');
+  var personTags = await r.json();
+  var allR = await fetch('/api/tags');
+  var allTags = await allR.json();
+  window._allTags = allTags;
+
+  chipsWrap.innerHTML = '';
+  if (!personTags.length) {
+    chipsWrap.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">Немає тегів</span>';
+  } else {
+    personTags.forEach(function(t) {
+      var chip = document.createElement('span');
+      chip.style.cssText = 'background:' + t.color + ';color:#0b0b0b;font-size:11px;padding:3px 8px;border-radius:10px;display:flex;align-items:center;gap:5px';
+      chip.innerHTML = '<span>' + escapeHtmlDF(t.name) + '</span><span style="cursor:pointer;opacity:.7">✕</span>';
+      chip.querySelector('span[style*="cursor"]').onclick = async function() {
+        await fetch('/api/persons/' + personId + '/tags/' + t.id, {method: 'DELETE'});
+        await renderTagPopoverContent(personId);
+        loadTagIndicator(personId);
+        renderTagFilterRow();
+        var card = document.querySelector('.person-card[data-id="' + personId + '"]');
+        if (card && allPersonsCache[personId]) { /* легке оновлення відкладемо до наступного loadPersons */ }
+      };
+      chipsWrap.appendChild(chip);
+    });
+  }
+
+  var assignedIds = personTags.map(function(t){ return t.id; });
+  var available = allTags.filter(function(t){ return assignedIds.indexOf(t.id) === -1; });
+  availWrap.innerHTML = '';
+  if (!available.length) {
+    availWrap.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">Немає інших тегів</span>';
+  } else {
+    available.forEach(function(t) {
+      var chip = document.createElement('span');
+      chip.style.cssText = 'background:var(--surface2);border:1px solid ' + t.color + ';color:var(--text);font-size:11px;padding:3px 8px;border-radius:10px;cursor:pointer';
+      chip.textContent = '+ ' + t.name;
+      chip.onclick = async function() {
+        await fetch('/api/persons/' + personId + '/tags', {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tag_id: t.id})
+        });
+        await renderTagPopoverContent(personId);
+        loadTagIndicator(personId);
+        renderTagFilterRow();
+      };
+      availWrap.appendChild(chip);
+    });
+  }
+}
+
+async function createAndAssignTag(personId, name) {
+  name = (name || '').trim();
+  if (!name) return;
+  await fetch('/api/persons/' + personId + '/tags', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: name})
+  });
+  await renderTagPopoverContent(personId);
+  loadTagIndicator(personId);
+  renderTagFilterRow();
+}
+
 function toggleDateFilter(personId) {
   var popover = document.getElementById('dateFilterPopover');
   var btn = document.getElementById('dateFilterBtn');
@@ -2088,12 +2266,18 @@ document.addEventListener('click', function(e) {
     if (wrap.contains(e.target)) return;
     var popover = wrap.querySelector('.date-filter-popover');
     if (!popover || !popover.classList.contains('open')) return;
-    popover.classList.remove('open');
-    var btn = wrap.querySelector('.gallery-toolbar-btn');
     if (popover.id === 'dateFilterPopover') {
-      if (!dateFilterActive && btn) btn.classList.remove('active');
-    } else if (btn) {
-      btn.classList.remove('active');
+      popover.classList.remove('open');
+      if (!dateFilterActive) {
+        var btn = wrap.querySelector('.gallery-toolbar-btn');
+        if (btn) btn.classList.remove('active');
+      }
+    } else if (popover.id === 'notePopover') {
+      closeNotePopover();
+    } else if (popover.id === 'tagPopover') {
+      closeTagPopover();
+    } else {
+      popover.classList.remove('open');
     }
   });
 });

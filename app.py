@@ -17,6 +17,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 VERSION = "1.3"
 GITHUB_REPO = "Sandro-it/facelib"
 
+TAG_COLORS = ["#4a9e4a", "#d4713a", "#3a7ad4", "#c94a7a", "#a15fd4", "#d4b83a", "#4ad4c4", "#d44a4a"]
+
 DB_PATH = "facelib.db"
 THUMBS_DIR = Path("static/thumbs")
 THUMBS_DIR.mkdir(parents=True, exist_ok=True)
@@ -79,10 +81,24 @@ def init_db():
             country TEXT,
             cached_at REAL DEFAULT (unixepoch())
         );
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            color TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS person_tags (
+            person_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+            PRIMARY KEY (person_id, tag_id),
+            FOREIGN KEY(person_id) REFERENCES persons(id),
+            FOREIGN KEY(tag_id) REFERENCES tags(id)
+        );
         CREATE INDEX IF NOT EXISTS idx_faces_person ON faces(person_id);
         CREATE INDEX IF NOT EXISTS idx_faces_photo ON faces(photo_id);
         CREATE INDEX IF NOT EXISTS idx_faces_person_photo ON faces(person_id, photo_id);
         CREATE INDEX IF NOT EXISTS idx_persons_name ON persons(name);
+        CREATE INDEX IF NOT EXISTS idx_person_tags_person ON person_tags(person_id);
+        CREATE INDEX IF NOT EXISTS idx_person_tags_tag ON person_tags(tag_id);
         """)
 
 # Ensure indexes exist (for existing databases)
@@ -462,7 +478,7 @@ async def toggle_folder(folder_id: int, data: dict):
 
 # Persons API
 @app.get("/api/persons")
-def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str = "count"):
+def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str = "count", tag_id: int = None):
     try:
         db = get_db()
         # Міграція на випадок якщо стовпці відсутні
@@ -475,27 +491,42 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
             db.commit()
         order_named = "LOWER(p.name) ASC" if sort == "name" else "photo_count DESC"
         search_pat = f"%{search.lower()}%" if search else None
+        tag_join = "JOIN person_tags pt ON pt.person_id = p.id AND pt.tag_id = ?" if tag_id else ""
+        params = []
+        if tag_id:
+            params.append(tag_id)
+        where_clause = "WHERE LOWER(p.name) LIKE ?" if search_pat else ""
         if search_pat:
-            rows = db.execute(f"""
-                SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-                       (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
-                FROM persons p
-                WHERE LOWER(p.name) LIKE ?
-                ORDER BY p.is_favorite DESC, p.sort_order ASC,
-                         CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
-                         {order_named}
-                LIMIT ? OFFSET ?
-            """, (search_pat, limit, offset)).fetchall()
-        else:
-            rows = db.execute(f"""
-                SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-                       (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
-                FROM persons p
-                ORDER BY p.is_favorite DESC, p.sort_order ASC,
-                         CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
-                         {order_named}
-                LIMIT ? OFFSET ?
-            """, (limit, offset)).fetchall()
+            params.append(search_pat)
+        params.extend([limit, offset])
+        rows = db.execute(f"""
+            SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
+                   (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
+            FROM persons p
+            {tag_join}
+            {where_clause}
+            ORDER BY p.is_favorite DESC, p.sort_order ASC,
+                     CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
+                     {order_named}
+            LIMIT ? OFFSET ?
+        """, params).fetchall()
+
+        # Батч-запит тегів для всіх людей цієї сторінки одразу (без N+1)
+        person_ids = [r["id"] for r in rows]
+        tags_by_person = {}
+        if person_ids:
+            placeholders = ",".join("?" * len(person_ids))
+            tag_rows = db.execute(f"""
+                SELECT pt.person_id, t.id, t.name, t.color
+                FROM person_tags pt JOIN tags t ON t.id = pt.tag_id
+                WHERE pt.person_id IN ({placeholders})
+                ORDER BY t.name
+            """, person_ids).fetchall()
+            for tr in tag_rows:
+                tags_by_person.setdefault(tr["person_id"], []).append(
+                    {"id": tr["id"], "name": tr["name"], "color": tr["color"]}
+                )
+
         result = []
         for r in rows:
             cover_url = None
@@ -513,6 +544,7 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
                 "id": r["id"], "name": r["name"],
                 "photo_count": r["photo_count"], "cover_url": cover_url,
                 "is_favorite": bool(r["is_favorite"]), "sort_order": r["sort_order"],
+                "tags": tags_by_person.get(r["id"], []),
             })
         return result
     except Exception as e:
@@ -520,13 +552,97 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
         return []
 
 @app.get("/api/persons/count")
-def persons_count(search: str = ""):
+def persons_count(search: str = "", tag_id: int = None):
     db = get_db()
+    tag_join = "JOIN person_tags pt ON pt.person_id = p.id AND pt.tag_id = ?" if tag_id else ""
+    params = []
+    if tag_id:
+        params.append(tag_id)
+    where_clause = "WHERE LOWER(p.name) LIKE ?" if search else ""
     if search:
-        row = db.execute("SELECT COUNT(*) FROM persons WHERE LOWER(name) LIKE ?", (f"%{search.lower()}%",)).fetchone()
-    else:
-        row = db.execute("SELECT COUNT(*) FROM persons").fetchone()
+        params.append(f"%{search.lower()}%")
+    row = db.execute(f"SELECT COUNT(*) FROM persons p {tag_join} {where_clause}", params).fetchone()
     return {"count": row[0]}
+
+# ---------------------------------------------------------------------------
+# Tags / groups
+# ---------------------------------------------------------------------------
+
+@app.get("/api/tags")
+def list_tags():
+    db = get_db()
+    rows = db.execute("""
+        SELECT t.id, t.name, t.color, COUNT(pt.person_id) as count
+        FROM tags t LEFT JOIN person_tags pt ON pt.tag_id = t.id
+        GROUP BY t.id
+        ORDER BY t.name
+    """).fetchall()
+    return [{"id": r["id"], "name": r["name"], "color": r["color"], "count": r["count"]} for r in rows]
+
+@app.post("/api/tags")
+async def create_tag(data: dict):
+    name = (data.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"error": "Назва тега не може бути порожньою"}, status_code=400)
+    db = get_db()
+    existing = db.execute("SELECT id, name, color FROM tags WHERE name=?", (name,)).fetchone()
+    if existing:
+        return {"id": existing["id"], "name": existing["name"], "color": existing["color"], "existed": True}
+    count = db.execute("SELECT COUNT(*) FROM tags").fetchone()[0]
+    color = TAG_COLORS[count % len(TAG_COLORS)]
+    with db:
+        cur = db.execute("INSERT INTO tags (name, color) VALUES (?, ?)", (name, color))
+    return {"id": cur.lastrowid, "name": name, "color": color, "existed": False}
+
+@app.delete("/api/tags/{tag_id}")
+def delete_tag(tag_id: int):
+    db = get_db()
+    with db:
+        db.execute("DELETE FROM person_tags WHERE tag_id=?", (tag_id,))
+        db.execute("DELETE FROM tags WHERE id=?", (tag_id,))
+    return {"ok": True}
+
+@app.get("/api/persons/{person_id}/tags")
+def get_person_tags(person_id: int):
+    db = get_db()
+    rows = db.execute("""
+        SELECT t.id, t.name, t.color FROM person_tags pt
+        JOIN tags t ON t.id = pt.tag_id
+        WHERE pt.person_id=? ORDER BY t.name
+    """, (person_id,)).fetchall()
+    return [{"id": r["id"], "name": r["name"], "color": r["color"]} for r in rows]
+
+@app.post("/api/persons/{person_id}/tags")
+async def add_person_tag(person_id: int, data: dict):
+    """Призначає тег людині. Приймає {tag_id: N} для існуючого тега або {name: '...'} для нового/за назвою."""
+    db = get_db()
+    tag_id = data.get("tag_id")
+    if not tag_id and data.get("name"):
+        name = data["name"].strip()
+        if not name:
+            return JSONResponse({"error": "Назва тега не може бути порожньою"}, status_code=400)
+        existing = db.execute("SELECT id FROM tags WHERE name=?", (name,)).fetchone()
+        if existing:
+            tag_id = existing["id"]
+        else:
+            count = db.execute("SELECT COUNT(*) FROM tags").fetchone()[0]
+            color = TAG_COLORS[count % len(TAG_COLORS)]
+            with db:
+                cur = db.execute("INSERT INTO tags (name, color) VALUES (?, ?)", (name, color))
+            tag_id = cur.lastrowid
+    if not tag_id:
+        return JSONResponse({"error": "Потрібно вказати tag_id або name"}, status_code=400)
+    with db:
+        db.execute("INSERT OR IGNORE INTO person_tags (person_id, tag_id) VALUES (?, ?)", (person_id, tag_id))
+    tag = db.execute("SELECT id, name, color FROM tags WHERE id=?", (tag_id,)).fetchone()
+    return {"ok": True, "tag": {"id": tag["id"], "name": tag["name"], "color": tag["color"]}}
+
+@app.delete("/api/persons/{person_id}/tags/{tag_id}")
+def remove_person_tag(person_id: int, tag_id: int):
+    db = get_db()
+    with db:
+        db.execute("DELETE FROM person_tags WHERE person_id=? AND tag_id=?", (person_id, tag_id))
+    return {"ok": True}
 
 @app.post("/api/persons/reorder")
 async def reorder_favorites(data: dict):
