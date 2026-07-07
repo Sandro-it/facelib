@@ -204,6 +204,7 @@
   .modal-list::-webkit-scrollbar{width:4px}
   .modal-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
   .modal-item{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer;transition:background .15s}
+  .modal-item.selected{background:var(--accent-dim)}
   .modal-item:hover{background:var(--surface2)}
   .modal-item img,.modal-item-ph{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
   .modal-item-ph{background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-dim)}
@@ -270,6 +271,7 @@
           <span id="searchDropResult" style="display:none;font-size:12px"></span>
           <input type="file" id="searchInput" accept="image/*" onchange="searchByFile(this.files[0])">
         </div>
+        <button class="btn btn-secondary" style="width:100%;margin-top:8px;font-size:12px;padding:6px" onclick="openSharedPhotosModal()">🖇️ Спільні фото кількох людей</button>
       </div>
       <div class="persons-section">
         <div class="persons-header">
@@ -325,6 +327,8 @@
     <input class="modal-search" id="mergeSearch" placeholder="Пошук за ім'ям..." oninput="filterMergeList(this.value)">
     <div class="modal-list" id="mergeList"></div>
     <div class="modal-footer">
+      <span id="sharedCount" style="display:none;font-size:12px;color:var(--text-dim);margin-right:auto"></span>
+      <button class="btn btn-primary" id="sharedFindBtn" style="display:none" onclick="submitSharedSearch()">🖇️ Знайти спільні фото</button>
       <button class="btn btn-secondary" onclick="closeMergeModal()">Скасувати</button>
     </div>
   </div>
@@ -352,6 +356,7 @@ var currentPhotos = [];
 var lbIndex = 0;
 var allPersonsCache = {}; // id -> person
 var mergeSourceId = null;
+var selectedSharedIds = new Set();
 var confirmCallback = null;
 var currentAbort = null;
 var loadYear = null;
@@ -1824,6 +1829,56 @@ async function openMergeModal(srcId) {
   allPersonsCache = await r.json();
   renderMergeList(Object.values(allPersonsCache));
 }
+async function openSharedPhotosModal() {
+  mergeSourceId = null;
+  selectedSharedIds.clear();
+  document.getElementById('mergeSearch').value = '';
+  var modal = document.getElementById('mergeModal');
+  modal.classList.add('open');
+  modal.dataset.mode = 'shared';
+  var title = modal.querySelector('h3');
+  if (title) title.textContent = '🖇️ Обери 2+ людей для пошуку спільних фото';
+  document.getElementById('sharedFindBtn').style.display = '';
+  document.getElementById('sharedCount').style.display = '';
+  updateSharedCount();
+  var r = await fetch('/api/persons?limit=500');
+  var persons = await r.json();
+  allPersonsCache = {};
+  persons.forEach(function(p){ allPersonsCache[p.id] = p; });
+  renderMergeList(persons);
+}
+
+function toggleSharedSelection(personId, itemEl) {
+  if (selectedSharedIds.has(personId)) {
+    selectedSharedIds.delete(personId);
+    itemEl.classList.remove('selected');
+  } else {
+    selectedSharedIds.add(personId);
+    itemEl.classList.add('selected');
+  }
+  updateSharedCount();
+}
+
+function updateSharedCount() {
+  var countEl = document.getElementById('sharedCount');
+  var btn = document.getElementById('sharedFindBtn');
+  if (!countEl || !btn) return;
+  countEl.textContent = 'Вибрано: ' + selectedSharedIds.size;
+  btn.disabled = selectedSharedIds.size < 2;
+  btn.style.opacity = selectedSharedIds.size < 2 ? '.5' : '1';
+}
+
+function submitSharedSearch() {
+  if (selectedSharedIds.size < 2) {
+    toastHeader('Обери щонайменше 2 людей', 'error');
+    return;
+  }
+  var ids = Array.from(selectedSharedIds);
+  var names = ids.map(function(id){ return allPersonsCache[id] ? (allPersonsCache[id].name || 'Без імені') : '?'; });
+  closeMergeModal();
+  openSharedPhotosView(ids, names);
+}
+
 function closeMergeModal() {
   var modal = document.getElementById('mergeModal');
   modal.classList.remove('open');
@@ -1831,6 +1886,9 @@ function closeMergeModal() {
   var title = modal.querySelector('h3');
   if (title) title.textContent = 'Злити з людиною';
   mergeSourceId = null;
+  selectedSharedIds.clear();
+  document.getElementById('sharedFindBtn').style.display = 'none';
+  document.getElementById('sharedCount').style.display = 'none';
 }
 function filterMergeList(q) {
   var filtered = Object.values(allPersonsCache).filter(function(p) {
@@ -1845,6 +1903,7 @@ function renderMergeList(persons) {
   if (!persons || !persons.length) { list.innerHTML = '<div style="padding:12px;color:var(--text-dim);font-size:12px">Завантажте більше людей прокруткою списку</div>'; return; }
   var modal = document.getElementById('mergeModal');
   var isMove = modal.dataset.mode === 'move';
+  var isShared = modal.dataset.mode === 'shared';
   persons.filter(function(p){ return p.id !== mergeSourceId; }).forEach(function(p) {
     var item = document.createElement('div'); item.className = 'modal-item';
     var avatar;
@@ -1857,6 +1916,9 @@ function renderMergeList(persons) {
     item.appendChild(avatar); item.appendChild(info);
     if (isMove) {
       item.addEventListener('click', (function(dstId, dstName){ return function(){ clickMove(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
+    } else if (isShared) {
+      if (selectedSharedIds.has(p.id)) item.classList.add('selected');
+      item.addEventListener('click', (function(pid, itemEl){ return function(){ toggleSharedSelection(pid, itemEl); }; })(p.id, item));
     } else {
       item.addEventListener('click', (function(dstId, dstName){ return function(){ clickMerge(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
     }
@@ -2334,6 +2396,122 @@ function resetDateFilter() {
   if (popover) popover.classList.remove('open');
   var person = allPersonsCache[currentPersonId];
   if (person) openPerson(person);
+}
+
+function openSharedPhotosView(personIds, names) {
+  currentPersonId = null;
+  document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
+  var content = document.getElementById('contentArea');
+  content.innerHTML = '';
+
+  var hdr = document.createElement('div'); hdr.className = 'content-header';
+  var h2 = document.createElement('h2'); h2.textContent = '🖇️ Спільні фото: ' + names.join(', ');
+  var cnt = document.createElement('span'); cnt.id = 'sharedPhotosCount';
+  cnt.style.cssText = 'color:var(--text-dim);font-size:12px;white-space:nowrap';
+  var closeBtn = document.createElement('button'); closeBtn.className = 'close-gallery-btn';
+  closeBtn.textContent = '✕ Закрити'; closeBtn.onclick = function(){ closeGallery(); };
+  hdr.appendChild(h2); hdr.appendChild(cnt); hdr.appendChild(closeBtn);
+  content.appendChild(hdr);
+
+  var galleryWrap = document.createElement('div'); galleryWrap.className = 'gallery-wrap';
+  var grid = document.createElement('div'); grid.className = 'photo-grid'; grid.id = 'photoGrid';
+  grid.addEventListener('click', function(e) {
+    if (selectedPhotoIds.size > 0 && !e.target.closest('.photo-card')) clearSelection();
+  });
+
+  var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
+  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.style.cssText = 'color:var(--text);font-size:13px;font-weight:600;flex:1';
+  var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
+  shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
+  var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
+  saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
+  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
+  cancelSelBtn.onclick = function(){ clearSelection(); };
+  selBar.appendChild(selCount); selBar.appendChild(shareSelBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
+
+  galleryWrap.appendChild(grid);
+  galleryWrap.appendChild(selBar);
+  content.appendChild(galleryWrap);
+
+  selectedPhotoIds.clear();
+  lastSelectedIdx = -1;
+  loadSharedPhotos(personIds);
+}
+
+async function loadSharedPhotos(personIds) {
+  var grid = document.getElementById('photoGrid');
+  if (!grid) return;
+  if (currentAbort) currentAbort.abort();
+  currentAbort = new AbortController();
+  var abortSignal = currentAbort.signal;
+
+  grid.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Шукаю спільні фото...</p></div>';
+  currentPhotos = [];
+  lastRenderedYear = null;
+  var offset = 0;
+  var batchSize = 200;
+  var done = false;
+  var firstBatch = true;
+
+  function removeSentinel() {
+    var s = document.getElementById('loadMoreBtn');
+    if (s) s.remove();
+  }
+  function ensureSentinel() {
+    removeSentinel();
+    var sentinel = document.createElement('div');
+    sentinel.id = 'loadMoreBtn';
+    sentinel.style.cssText = 'grid-column:1/-1;height:20px;background:transparent';
+    grid.appendChild(sentinel);
+  }
+
+  async function loadMore() {
+    if (done || abortSignal.aborted) return;
+    var params = new URLSearchParams();
+    params.set('person_ids', personIds.join(','));
+    params.set('limit', batchSize);
+    params.set('offset', offset);
+    try {
+      var r = await fetch('/api/shared-photos?' + params.toString(), { signal: abortSignal });
+      if (abortSignal.aborted) return;
+      var batch = await r.json();
+      if (firstBatch) { grid.innerHTML = ''; firstBatch = false; }
+      if (!batch.length) {
+        done = true;
+        removeSentinel();
+        if (!currentPhotos.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🖇️</div><p>Спільних фото не знайдено</p></div>';
+        }
+        var cntEl = document.getElementById('sharedPhotosCount');
+        if (cntEl) cntEl.textContent = currentPhotos.length + ' фото';
+        return;
+      }
+      batch.forEach(function(ph) { currentPhotos.push(ph); appendPhotoCard(ph, currentPhotos.length - 1, grid); });
+      offset += batch.length;
+      var cntEl2 = document.getElementById('sharedPhotosCount');
+      if (cntEl2) cntEl2.textContent = currentPhotos.length + '+ фото';
+      if (batch.length < batchSize) {
+        done = true; removeSentinel();
+        if (cntEl2) cntEl2.textContent = currentPhotos.length + ' фото';
+        return;
+      }
+      ensureSentinel();
+    } catch(e) {
+      if (abortSignal.aborted) return;
+      if (firstBatch) grid.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Помилка: ' + e.message + '</p></div>';
+    }
+  }
+
+  window._photoScrollFn = function() {
+    if (done) return;
+    if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 300) loadMore();
+  };
+  grid.addEventListener('scroll', window._photoScrollFn);
+
+  await loadMore();
+  setTimeout(function() {
+    if (!done && grid.scrollHeight <= grid.clientHeight + 50) loadMore();
+  }, 150);
 }
 
 async function loadDateFilteredPhotos(personId) {

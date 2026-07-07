@@ -861,6 +861,45 @@ def person_years(person_id: int):
     """, (person_id,)).fetchall()
     return [r["year"] for r in rows if r["year"]]
 
+@app.get("/api/shared-photos")
+def shared_photos(person_ids: str, limit: int = 200, offset: int = 0):
+    """Повертає фото, на яких є ВСІ вказані люди одночасно. person_ids — список id через кому."""
+    import datetime
+    try:
+        ids = [int(x) for x in person_ids.split(",") if x.strip()]
+    except ValueError:
+        return JSONResponse({"error": "Некоректний список id"}, status_code=400)
+    ids = list(set(ids))
+    if len(ids) < 2:
+        return JSONResponse({"error": "Потрібно щонайменше 2 людини"}, status_code=400)
+    db = get_db()
+    placeholders = ",".join("?" * len(ids))
+    rows = db.execute(f"""
+        SELECT ph.id, ph.path, ph.taken_at FROM photos ph
+        JOIN (
+            SELECT photo_id FROM faces
+            WHERE person_id IN ({placeholders})
+            GROUP BY photo_id
+            HAVING COUNT(DISTINCT person_id) = ?
+        ) matched ON matched.photo_id = ph.id
+        ORDER BY ph.taken_at DESC NULLS LAST
+        LIMIT ? OFFSET ?
+    """, ids + [len(ids), limit, offset]).fetchall()
+    result = []
+    for r in rows:
+        yr = None
+        if r["taken_at"]:
+            try:
+                yr = datetime.datetime.fromtimestamp(r["taken_at"]).year
+            except Exception:
+                pass
+        result.append({
+            "id": r["id"], "path": r["path"],
+            "thumb": make_photo_thumb(r["path"], r["id"]),
+            "taken_at": r["taken_at"], "year": yr,
+        })
+    return result
+
 @app.get("/api/persons/{person_id}/photos")
 def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int = None,
                    date_from: str = None, date_to: str = None):
