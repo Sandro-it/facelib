@@ -890,7 +890,10 @@ async function loadMorePersons(highlightIds) {
 }
 
 async function toggleFavorite(pid) {
-  var r = await fetch('/api/persons/' + pid + '/favorite', {method:'POST'});
+  var url = currentTagFilter
+    ? '/api/persons/' + pid + '/tags/' + currentTagFilter + '/favorite'
+    : '/api/persons/' + pid + '/favorite';
+  var r = await fetch(url, {method:'POST'});
   var d = await r.json();
   if (!d.ok) return;
   var list = document.getElementById('personList');
@@ -937,7 +940,8 @@ function saveFavoritesOrder() {
   var list = document.getElementById('personList');
   var ids = [];
   list.querySelectorAll('.person-card[data-fav="1"]').forEach(function(c){ ids.push(parseInt(c.dataset.id)); });
-  fetch('/api/persons/reorder', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})});
+  var url = currentTagFilter ? '/api/tags/' + currentTagFilter + '/reorder' : '/api/persons/reorder';
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})});
 }
 
 var personsSort = 'count'; // 'count' | 'name'

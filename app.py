@@ -89,6 +89,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS person_tags (
             person_id INTEGER NOT NULL,
             tag_id INTEGER NOT NULL,
+            is_favorite INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
             PRIMARY KEY (person_id, tag_id),
             FOREIGN KEY(person_id) REFERENCES persons(id),
             FOREIGN KEY(tag_id) REFERENCES tags(id)
@@ -118,6 +120,12 @@ def ensure_migrations():
             conn.execute("ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
         if 'note' not in cols:
             conn.execute("ALTER TABLE persons ADD COLUMN note TEXT")
+        # Add per-tag favorite/order columns if not exist
+        pt_cols = [r[1] for r in conn.execute("PRAGMA table_info(person_tags)").fetchall()]
+        if 'is_favorite' not in pt_cols:
+            conn.execute("ALTER TABLE person_tags ADD COLUMN is_favorite INTEGER DEFAULT 0")
+        if 'sort_order' not in pt_cols:
+            conn.execute("ALTER TABLE person_tags ADD COLUMN sort_order INTEGER DEFAULT 0")
         # Add geo_cache table if not exists
         conn.execute("""
             CREATE TABLE IF NOT EXISTS geo_cache (
@@ -492,6 +500,9 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
         order_named = "LOWER(p.name) ASC" if sort == "name" else "photo_count DESC"
         search_pat = f"%{search.lower()}%" if search else None
         tag_join = "JOIN person_tags pt ON pt.person_id = p.id AND pt.tag_id = ?" if tag_id else ""
+        # В межах конкретного тега обране/порядок — свої, окремі від глобального списку
+        fav_col = "pt.is_favorite" if tag_id else "p.is_favorite"
+        order_col = "pt.sort_order" if tag_id else "p.sort_order"
         params = []
         if tag_id:
             params.append(tag_id)
@@ -500,12 +511,12 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
             params.append(search_pat)
         params.extend([limit, offset])
         rows = db.execute(f"""
-            SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
+            SELECT p.id, p.name, p.cover_face_id, {fav_col} as is_favorite, {order_col} as sort_order,
                    (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
             FROM persons p
             {tag_join}
             {where_clause}
-            ORDER BY p.is_favorite DESC, p.sort_order ASC,
+            ORDER BY {fav_col} DESC, {order_col} ASC,
                      CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
                      {order_named}
             LIMIT ? OFFSET ?
@@ -916,6 +927,28 @@ def toggle_favorite(person_id: int):
     with db:
         db.execute("UPDATE persons SET is_favorite=? WHERE id=?", (new_val, person_id))
     return {"ok": True, "is_favorite": bool(new_val)}
+
+@app.post("/api/persons/{person_id}/tags/{tag_id}/favorite")
+def toggle_tag_favorite(person_id: int, tag_id: int):
+    """Перемикає 'обране' в межах конкретного тега — окремо від глобального обраного."""
+    db = get_db()
+    row = db.execute("SELECT is_favorite FROM person_tags WHERE person_id=? AND tag_id=?", (person_id, tag_id)).fetchone()
+    if not row:
+        return JSONResponse({"ok": False, "error": "Тег не призначено цій людині"}, status_code=404)
+    new_val = 0 if row["is_favorite"] else 1
+    with db:
+        db.execute("UPDATE person_tags SET is_favorite=? WHERE person_id=? AND tag_id=?", (new_val, person_id, tag_id))
+    return {"ok": True, "is_favorite": bool(new_val)}
+
+@app.post("/api/tags/{tag_id}/reorder")
+async def reorder_tag_favorites(tag_id: int, data: dict):
+    """data: {ids: [id1, id2, ...]} — порядок обраних у межах цього тега"""
+    ids = data.get("ids", [])
+    db = get_db()
+    with db:
+        for i, pid in enumerate(ids):
+            db.execute("UPDATE person_tags SET sort_order=? WHERE person_id=? AND tag_id=?", (i, pid, tag_id))
+    return {"ok": True}
 
 @app.post("/api/persons/split")
 async def split_person(data: dict):
