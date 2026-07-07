@@ -2174,6 +2174,7 @@ async function renderTagPopoverContent(personId) {
   var allR = await fetch('/api/tags');
   var allTags = await allR.json();
   window._allTags = allTags;
+  applyTagsToCard(personId, personTags);
 
   chipsWrap.innerHTML = '';
   if (!personTags.length) {
@@ -2188,8 +2189,7 @@ async function renderTagPopoverContent(personId) {
         await renderTagPopoverContent(personId);
         loadTagIndicator(personId);
         renderTagFilterRow();
-        var card = document.querySelector('.person-card[data-id="' + personId + '"]');
-        if (card && allPersonsCache[personId]) { /* легке оновлення відкладемо до наступного loadPersons */ }
+        if (currentTagFilter) loadPersons(null);
       };
       chipsWrap.appendChild(chip);
     });
@@ -2212,9 +2212,31 @@ async function renderTagPopoverContent(personId) {
         await renderTagPopoverContent(personId);
         loadTagIndicator(personId);
         renderTagFilterRow();
+        if (currentTagFilter) loadPersons(null);
       };
       availWrap.appendChild(chip);
     });
+  }
+}
+
+function applyTagsToCard(personId, tags) {
+  if (allPersonsCache[personId]) allPersonsCache[personId].tags = tags;
+  var card = document.querySelector('.person-card[data-id="' + personId + '"]');
+  if (!card) return;
+  var avatarEl = card.querySelector('.person-avatar, .person-avatar-ph');
+  if (!avatarEl || !avatarEl.parentElement) return;
+  var wrap = avatarEl.parentElement;
+  var existingDots = wrap.querySelector('.tag-dots');
+  if (existingDots) existingDots.remove();
+  if (tags && tags.length) {
+    var dotsWrap = document.createElement('div'); dotsWrap.className = 'tag-dots';
+    dotsWrap.title = tags.map(function(t){ return t.name; }).join(', ');
+    tags.forEach(function(t) {
+      var dot = document.createElement('span');
+      dot.style.cssText = 'width:6px;height:6px;border-radius:50%;background:' + t.color + ';display:block';
+      dotsWrap.appendChild(dot);
+    });
+    wrap.appendChild(dotsWrap);
   }
 }
 
@@ -2227,6 +2249,7 @@ async function createAndAssignTag(personId, name) {
   await renderTagPopoverContent(personId);
   loadTagIndicator(personId);
   renderTagFilterRow();
+  if (currentTagFilter) loadPersons(null);
 }
 
 function toggleDateFilter(personId) {
