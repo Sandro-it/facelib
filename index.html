@@ -936,6 +936,25 @@ async function openPerson(p) {
   nameWrap.appendChild(inp); nameWrap.appendChild(badge);
   inp.addEventListener('change', function() { renamePerson(p.id, inp.value, h2, badge, inp); });
 
+  var noteWrap = document.createElement('div'); noteWrap.className = 'date-filter-wrap';
+  var noteBtn = document.createElement('button');
+  noteBtn.className = 'gallery-toolbar-btn'; noteBtn.id = 'noteBtn';
+  noteBtn.innerHTML = '📝'; noteBtn.title = 'Нотатка про людину';
+  noteBtn.style.cssText = 'font-size:12px;padding:5px 10px';
+  noteBtn.onclick = function() { toggleNotePopover(p.id); };
+  var notePopover = document.createElement('div');
+  notePopover.className = 'date-filter-popover'; notePopover.id = 'notePopover';
+  notePopover.innerHTML =
+    '<label>Нотатка</label>' +
+    '<textarea id="noteTextarea" rows="4" style="width:100%;resize:vertical;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit"></textarea>' +
+    '<div class="df-actions">' +
+      '<button class="btn btn-primary" id="noteSaveBtn">Зберегти</button>' +
+      '<button class="btn btn-secondary" id="noteCloseBtn">Закрити</button>' +
+    '</div>';
+  noteWrap.appendChild(noteBtn); noteWrap.appendChild(notePopover);
+  notePopover.querySelector('#noteSaveBtn').onclick = function() { saveNote(p.id); };
+  notePopover.querySelector('#noteCloseBtn').onclick = function() { closeNotePopover(); };
+
   var actions = document.createElement('div'); actions.className = 'header-actions';
   var mergeBtn = document.createElement('button'); mergeBtn.className = 'btn btn-secondary';
   mergeBtn.textContent = '🔗 Злити'; mergeBtn.style.fontSize = '12px'; mergeBtn.style.padding = '5px 10px';
@@ -953,8 +972,9 @@ async function openPerson(p) {
   var hdrMsg = document.createElement('span'); hdrMsg.id = 'hdrMsg';
   hdrMsg.style.cssText = 'font-size:12px;font-weight:600;opacity:0;transition:opacity .25s;white-space:nowrap';
 
-  hdr.appendChild(h2); hdr.appendChild(nameWrap); hdr.appendChild(cnt); hdr.appendChild(hdrMsg); hdr.appendChild(actions);
+  hdr.appendChild(h2); hdr.appendChild(nameWrap); hdr.appendChild(noteWrap); hdr.appendChild(cnt); hdr.appendChild(hdrMsg); hdr.appendChild(actions);
   content.appendChild(hdr);
+  loadNoteIndicator(p.id);
 
   // Toolbar під хедером
   var toolbar = document.createElement('div'); toolbar.className = 'gallery-toolbar'; toolbar.id = 'galleryToolbar';
@@ -1983,6 +2003,54 @@ async function togglePlaces(personId) {
   }
 }
 
+async function loadNoteIndicator(personId) {
+  var btn = document.getElementById('noteBtn');
+  if (!btn) return;
+  try {
+    var r = await fetch('/api/persons/' + personId + '/note');
+    var d = await r.json();
+    btn.dataset.note = d.note || '';
+    btn.classList.toggle('active', !!(d.note && d.note.trim()));
+  } catch (e) { /* тихо ігноруємо - не критично для відкриття галереї */ }
+}
+
+function toggleNotePopover(personId) {
+  var popover = document.getElementById('notePopover');
+  var btn = document.getElementById('noteBtn');
+  if (!popover || !btn) return;
+  var isOpen = popover.classList.contains('open');
+  if (isOpen) { closeNotePopover(); return; }
+  var textarea = document.getElementById('noteTextarea');
+  if (textarea) textarea.value = btn.dataset.note || '';
+  popover.classList.add('open');
+  btn.classList.add('active');
+  if (textarea) setTimeout(function(){ textarea.focus(); }, 50);
+}
+
+function closeNotePopover() {
+  var popover = document.getElementById('notePopover');
+  var btn = document.getElementById('noteBtn');
+  if (popover) popover.classList.remove('open');
+  if (btn) btn.classList.toggle('active', !!(btn.dataset.note && btn.dataset.note.trim()));
+}
+
+async function saveNote(personId) {
+  var textarea = document.getElementById('noteTextarea');
+  var btn = document.getElementById('noteBtn');
+  if (!textarea) return;
+  var note = textarea.value;
+  try {
+    await fetch('/api/persons/' + personId, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({note: note})
+    });
+    if (btn) btn.dataset.note = note;
+    closeNotePopover();
+    toastHeader('✓ Нотатку збережено', 'success');
+  } catch (e) {
+    toastHeader('Помилка збереження нотатки', 'error');
+  }
+}
+
 function toggleDateFilter(personId) {
   var popover = document.getElementById('dateFilterPopover');
   var btn = document.getElementById('dateFilterBtn');
@@ -2016,14 +2084,18 @@ function toggleDateFilter(personId) {
 }
 
 document.addEventListener('click', function(e) {
-  var wrap = document.querySelector('.date-filter-wrap');
-  if (!wrap || wrap.contains(e.target)) return;
-  var popover = document.getElementById('dateFilterPopover');
-  var btn = document.getElementById('dateFilterBtn');
-  if (popover && popover.classList.contains('open')) {
+  document.querySelectorAll('.date-filter-wrap').forEach(function(wrap) {
+    if (wrap.contains(e.target)) return;
+    var popover = wrap.querySelector('.date-filter-popover');
+    if (!popover || !popover.classList.contains('open')) return;
     popover.classList.remove('open');
-    if (!dateFilterActive && btn) btn.classList.remove('active');
-  }
+    var btn = wrap.querySelector('.gallery-toolbar-btn');
+    if (popover.id === 'dateFilterPopover') {
+      if (!dateFilterActive && btn) btn.classList.remove('active');
+    } else if (btn) {
+      btn.classList.remove('active');
+    }
+  });
 });
 
 function applyDateFilter(personId) {

@@ -100,6 +100,8 @@ def ensure_migrations():
             conn.execute("ALTER TABLE persons ADD COLUMN is_favorite INTEGER DEFAULT 0")
         if 'sort_order' not in cols:
             conn.execute("ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
+        if 'note' not in cols:
+            conn.execute("ALTER TABLE persons ADD COLUMN note TEXT")
         # Add geo_cache table if not exists
         conn.execute("""
             CREATE TABLE IF NOT EXISTS geo_cache (
@@ -823,6 +825,14 @@ async def split_person(data: dict):
     return {"ok": True, "target_person_id": target_person_id}
 
 
+@app.get("/api/persons/{person_id}/note")
+def get_person_note(person_id: int):
+    db = get_db()
+    r = db.execute("SELECT note FROM persons WHERE id=?", (person_id,)).fetchone()
+    if not r:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return {"note": r["note"] or ""}
+
 @app.patch("/api/persons/{person_id}")
 async def update_person(person_id: int, data: dict):
     db = get_db()
@@ -832,6 +842,9 @@ async def update_person(person_id: int, data: dict):
     if "cover_face_id" in data:
         with db:
             db.execute("UPDATE persons SET cover_face_id=? WHERE id=?", (data["cover_face_id"], person_id))
+    if "note" in data:
+        with db:
+            db.execute("UPDATE persons SET note=? WHERE id=?", (data["note"], person_id))
     return {"ok": True}
 
 @app.delete("/api/persons/{person_id}")
