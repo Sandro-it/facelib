@@ -231,6 +231,12 @@ def ensure_migrations():
             conn.execute("ALTER TABLE person_tags ADD COLUMN is_favorite INTEGER DEFAULT 0")
         if 'sort_order' not in pt_cols:
             conn.execute("ALTER TABLE person_tags ADD COLUMN sort_order INTEGER DEFAULT 0")
+        # Add size/camera cache columns for stats (lazy-filled, like city/country)
+        photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]
+        if 'size' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN size INTEGER")
+        if 'camera' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN camera TEXT")
         # Add geo_cache table if not exists
         conn.execute("""
             CREATE TABLE IF NOT EXISTS geo_cache (
@@ -527,8 +533,24 @@ def run_indexer():
 # API
 # ---------------------------------------------------------------------------
 
+STATS_FILL_CAP = 3000  # скільки фото сканувати на диску за один запит статистики (лениве кешування)
+
+def _fill_missing_size_camera(db):
+    rows = db.execute("SELECT id, path FROM photos WHERE size IS NULL OR camera IS NULL LIMIT ?", (STATS_FILL_CAP,)).fetchall()
+    for r in rows:
+        try:
+            size = os.path.getsize(r["path"])
+        except OSError:
+            size = 0
+        camera = get_camera_from_exif(r["path"]) or ""
+        db.execute("UPDATE photos SET size=?, camera=? WHERE id=?", (size, camera, r["id"]))
+    if rows:
+        db.commit()
+    return len(rows)
+
 @app.get("/api/stats")
 def archive_stats():
+    import datetime
     db = get_db()
     photos_total = db.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
     faces_total = db.execute("SELECT COUNT(*) FROM faces").fetchone()[0]
@@ -562,6 +584,79 @@ def archive_stats():
     """).fetchall()
     top_tagged = [{"id": r["id"], "name": r["name"] or "Без імені", "count": r["cnt"]} for r in top_tagged_rows]
 
+    # Найстаріше і найновіше фото
+    minmax_row = db.execute("SELECT MIN(taken_at) as min_ts, MAX(taken_at) as max_ts FROM photos WHERE taken_at IS NOT NULL").fetchone()
+    oldest_date = None
+    newest_date = None
+    if minmax_row["min_ts"]:
+        oldest_date = datetime.datetime.fromtimestamp(minmax_row["min_ts"]).strftime("%d.%m.%Y")
+    if minmax_row["max_ts"]:
+        newest_date = datetime.datetime.fromtimestamp(minmax_row["max_ts"]).strftime("%d.%m.%Y")
+
+    # Активність по місяцях (агреговано по всіх роках) і днях тижня
+    month_rows = db.execute("""
+        SELECT CAST(strftime('%m', datetime(taken_at,'unixepoch')) AS INTEGER) as month, COUNT(*) as cnt
+        FROM photos WHERE taken_at IS NOT NULL GROUP BY month ORDER BY month
+    """).fetchall()
+    by_month = [{"month": r["month"], "count": r["cnt"]} for r in month_rows if r["month"]]
+
+    weekday_rows = db.execute("""
+        SELECT CAST(strftime('%w', datetime(taken_at,'unixepoch')) AS INTEGER) as dow, COUNT(*) as cnt
+        FROM photos WHERE taken_at IS NOT NULL GROUP BY dow ORDER BY dow
+    """).fetchall()
+    by_weekday = [{"dow": r["dow"], "count": r["cnt"]} for r in weekday_rows]
+
+    # Розмір на диску + камери - лениве кешування (по STATS_FILL_CAP фото за раз)
+    filled_now = _fill_missing_size_camera(db)
+    remaining_to_scan = db.execute("SELECT COUNT(*) FROM photos WHERE size IS NULL OR camera IS NULL").fetchone()[0]
+
+    size_row = db.execute("SELECT SUM(size) as total FROM photos WHERE size IS NOT NULL").fetchone()
+    total_size_bytes = size_row["total"] or 0
+
+    top_largest_rows = db.execute("""
+        SELECT id, path, size FROM photos WHERE size IS NOT NULL ORDER BY size DESC LIMIT 10
+    """).fetchall()
+    top_largest = [{"id": r["id"], "path": r["path"], "size": r["size"]} for r in top_largest_rows]
+
+    camera_rows = db.execute("""
+        SELECT camera, COUNT(*) as cnt FROM photos
+        WHERE camera IS NOT NULL AND camera != ''
+        GROUP BY camera ORDER BY cnt DESC LIMIT 10
+    """).fetchall()
+    top_cameras = [{"camera": r["camera"], "count": r["cnt"]} for r in camera_rows]
+
+    # Люди без тегів / без нотаток
+    untagged_total = db.execute("""
+        SELECT COUNT(*) FROM persons WHERE id NOT IN (SELECT DISTINCT person_id FROM person_tags)
+    """).fetchone()[0]
+    untagged_sample_rows = db.execute("""
+        SELECT id, name FROM persons WHERE id NOT IN (SELECT DISTINCT person_id FROM person_tags)
+        ORDER BY (SELECT COUNT(*) FROM faces WHERE person_id=persons.id) DESC LIMIT 10
+    """).fetchall()
+    untagged_sample = [{"id": r["id"], "name": r["name"] or "Без імені"} for r in untagged_sample_rows]
+
+    unnoted_total = db.execute("SELECT COUNT(*) FROM persons WHERE note IS NULL OR note=''").fetchone()[0]
+    unnoted_sample_rows = db.execute("""
+        SELECT id, name FROM persons WHERE note IS NULL OR note=''
+        ORDER BY (SELECT COUNT(*) FROM faces WHERE person_id=persons.id) DESC LIMIT 10
+    """).fetchall()
+    unnoted_sample = [{"id": r["id"], "name": r["name"] or "Без імені"} for r in unnoted_sample_rows]
+
+    # Прогрес індексації по роках - скільки фото в кожному році вже мають хоч одне розпізнане обличчя
+    progress_rows = db.execute("""
+        SELECT CAST(strftime('%Y', datetime(ph.taken_at,'unixepoch')) AS INTEGER) as year,
+               COUNT(DISTINCT ph.id) as total,
+               COUNT(DISTINCT CASE WHEN f.id IS NOT NULL THEN ph.id END) as with_faces
+        FROM photos ph LEFT JOIN faces f ON f.photo_id = ph.id
+        WHERE ph.taken_at IS NOT NULL
+        GROUP BY year ORDER BY year
+    """).fetchall()
+    indexing_progress = [
+        {"year": r["year"], "total": r["total"], "with_faces": r["with_faces"],
+         "pct": round(100 * r["with_faces"] / r["total"]) if r["total"] else 0}
+        for r in progress_rows if r["year"]
+    ]
+
     return {
         "photos_total": photos_total,
         "faces_total": faces_total,
@@ -570,6 +665,19 @@ def archive_stats():
         "top_people": top_people,
         "top_places": top_places,
         "top_tagged": top_tagged,
+        "oldest_date": oldest_date,
+        "newest_date": newest_date,
+        "by_month": by_month,
+        "by_weekday": by_weekday,
+        "total_size_bytes": total_size_bytes,
+        "top_largest": top_largest,
+        "top_cameras": top_cameras,
+        "untagged_total": untagged_total,
+        "untagged_sample": untagged_sample,
+        "unnoted_total": unnoted_total,
+        "unnoted_sample": unnoted_sample,
+        "indexing_progress": indexing_progress,
+        "size_scan_remaining": remaining_to_scan,
     }
 
 @app.get("/api/status")
@@ -835,6 +943,33 @@ def get_person(person_id: int):
 # ---------------------------------------------------------------------------
 # Places / GPS
 # ---------------------------------------------------------------------------
+
+def get_camera_from_exif(path: str):
+    """Зчитує модель камери з EXIF (Make + Model). Повертає рядок або None."""
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS
+        img = Image.open(path)
+        exif_data = img._getexif()
+        if not exif_data:
+            return None
+        make = None
+        model = None
+        for tag_id, value in exif_data.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == "Make":
+                make = str(value).strip().strip("\x00")
+            elif tag == "Model":
+                model = str(value).strip().strip("\x00")
+        if not make and not model:
+            return None
+        if make and model:
+            if model.lower().startswith(make.lower()):
+                return model
+            return f"{make} {model}"
+        return make or model
+    except Exception:
+        return None
 
 def get_gps_from_exif(path: str):
     """Зчитує GPS координати з EXIF фото. Повертає (lat, lon) або None."""

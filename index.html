@@ -1413,7 +1413,30 @@ async function openArchiveStats() {
       '<div style="font-size:12px;color:var(--text-dim)">' + cd[2] + '</div>';
     cards.appendChild(card);
   });
+  if (d.total_size_bytes) {
+    var sizeGb = (d.total_size_bytes / 1024 / 1024 / 1024).toFixed(1);
+    var sizeCard = document.createElement('div');
+    sizeCard.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 22px;min-width:140px';
+    sizeCard.innerHTML = '<div style="font-size:22px">💾</div>' +
+      '<div style="font-size:22px;font-weight:700;margin-top:4px">' + sizeGb + ' ГБ</div>' +
+      '<div style="font-size:12px;color:var(--text-dim)">на диску</div>';
+    cards.appendChild(sizeCard);
+  }
+  if (d.oldest_date && d.newest_date) {
+    var rangeCard = document.createElement('div');
+    rangeCard.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 22px;min-width:180px';
+    rangeCard.innerHTML = '<div style="font-size:22px">🗓️</div>' +
+      '<div style="font-size:15px;font-weight:700;margin-top:4px">' + d.oldest_date + ' — ' + d.newest_date + '</div>' +
+      '<div style="font-size:12px;color:var(--text-dim)">діапазон дат</div>';
+    cards.appendChild(rangeCard);
+  }
   body.appendChild(cards);
+  if (d.size_scan_remaining > 0) {
+    var scanNote = document.createElement('div');
+    scanNote.style.cssText = 'font-size:11px;color:var(--text-dim);margin:-18px 0 20px';
+    scanNote.textContent = '⏳ Розмір і камери ще розраховуються (' + d.size_scan_remaining.toLocaleString() + ' фото лишилось) — відкрий статистику ще раз пізніше для повних даних';
+    body.appendChild(scanNote);
+  }
 
   // Фото по роках (вертикальні стовпчики)
   if (d.by_year && d.by_year.length) {
@@ -1442,6 +1465,45 @@ async function openArchiveStats() {
     yearSection.appendChild(chart);
     body.appendChild(yearSection);
   }
+
+  // Активність по місяцях і днях тижня - поруч
+  var activityCols = document.createElement('div');
+  activityCols.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap;margin-bottom:28px';
+
+  var MONTH_NAMES = ['', 'Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+  var WEEKDAY_NAMES = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']; // 0=Нд як у SQLite strftime %w
+
+  function buildMiniBarChart(title, items, nameFn) {
+    var section = document.createElement('div');
+    section.style.cssText = 'flex:1;min-width:280px';
+    section.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">' + title + '</div>';
+    if (!items || !items.length) {
+      section.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає даних</div>';
+      return section;
+    }
+    var maxCount = Math.max.apply(null, items.map(function(it){ return it.count; }));
+    var chart = document.createElement('div');
+    chart.style.cssText = 'display:flex;align-items:flex-end;gap:4px;height:100px';
+    items.forEach(function(it) {
+      var barWrap = document.createElement('div');
+      barWrap.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%';
+      var bar = document.createElement('div');
+      var heightPct = Math.max(4, Math.round((it.count / maxCount) * 100));
+      bar.style.cssText = 'width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:' + heightPct + '%';
+      bar.title = nameFn(it) + ': ' + it.count;
+      var label = document.createElement('div');
+      label.style.cssText = 'font-size:10px;color:var(--text-dim);margin-top:4px';
+      label.textContent = nameFn(it);
+      barWrap.appendChild(bar); barWrap.appendChild(label);
+      chart.appendChild(barWrap);
+    });
+    section.appendChild(chart);
+    return section;
+  }
+
+  activityCols.appendChild(buildMiniBarChart('Активність по місяцях', d.by_month, function(it){ return MONTH_NAMES[it.month]; }));
+  activityCols.appendChild(buildMiniBarChart('Активність по днях тижня', d.by_weekday, function(it){ return WEEKDAY_NAMES[it.dow]; }));
+  body.appendChild(activityCols);
 
   // Топ людей та топ локацій - горизонтальні стовпчики поруч
   var cols = document.createElement('div');
@@ -1491,6 +1553,94 @@ async function openArchiveStats() {
   }));
 
   body.appendChild(cols);
+
+  // Топ камер та найбільші фото
+  var cols2 = document.createElement('div');
+  cols2.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap;margin-top:28px';
+  cols2.appendChild(buildHBarSection('Топ камер/пристроїв', d.top_cameras, 'camera', null));
+
+  var largestSection = document.createElement('div');
+  largestSection.style.cssText = 'flex:1;min-width:280px';
+  largestSection.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Найбільші фото</div>';
+  if (d.top_largest && d.top_largest.length) {
+    d.top_largest.forEach(function(it) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:12px';
+      var pathEl = document.createElement('span');
+      pathEl.style.cssText = 'color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      pathEl.textContent = it.path;
+      pathEl.title = it.path;
+      var sizeEl = document.createElement('span');
+      sizeEl.style.cssText = 'flex-shrink:0;font-weight:600';
+      sizeEl.textContent = (it.size / 1024 / 1024).toFixed(1) + ' МБ';
+      row.appendChild(pathEl); row.appendChild(sizeEl);
+      largestSection.appendChild(row);
+    });
+  } else {
+    largestSection.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає даних</div>';
+  }
+  cols2.appendChild(largestSection);
+  body.appendChild(cols2);
+
+  // Люди без тегів / без нотаток
+  var cols3 = document.createElement('div');
+  cols3.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap;margin-top:28px';
+
+  function buildPersonListSection(title, total, sample) {
+    var section = document.createElement('div');
+    section.style.cssText = 'flex:1;min-width:280px';
+    section.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">' + title + ' (' + total.toLocaleString() + ')</div>';
+    if (!sample || !sample.length) {
+      section.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає такиx людей 🎉</div>';
+      return section;
+    }
+    var list = document.createElement('div');
+    list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+    sample.forEach(function(p) {
+      var chip = document.createElement('span');
+      chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px 10px;font-size:12px;cursor:pointer';
+      chip.textContent = p.name;
+      chip.onclick = function() {
+        fetch('/api/persons/' + p.id).then(function(r){ return r.json(); }).then(function(person){
+          if (person && person.id) openPerson(person);
+        });
+      };
+      list.appendChild(chip);
+    });
+    section.appendChild(list);
+    return section;
+  }
+
+  cols3.appendChild(buildPersonListSection('Без тегів', d.untagged_total, d.untagged_sample));
+  cols3.appendChild(buildPersonListSection('Без нотаток', d.unnoted_total, d.unnoted_sample));
+  body.appendChild(cols3);
+
+  // Прогрес індексації по роках
+  if (d.indexing_progress && d.indexing_progress.length) {
+    var progSection = document.createElement('div');
+    progSection.style.cssText = 'margin-top:28px';
+    progSection.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Прогрес індексації по роках</div>';
+    d.indexing_progress.forEach(function(y) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:6px';
+      var yearLabel = document.createElement('div');
+      yearLabel.style.cssText = 'width:50px;flex-shrink:0;font-size:12px';
+      yearLabel.textContent = y.year;
+      var barBg = document.createElement('div');
+      barBg.style.cssText = 'flex:1;background:var(--surface2);border-radius:5px;height:16px;overflow:hidden';
+      var bar = document.createElement('div');
+      var barColor = y.pct >= 90 ? 'var(--green)' : (y.pct >= 40 ? 'var(--accent)' : 'var(--red)');
+      bar.style.cssText = 'width:' + Math.max(2, y.pct) + '%;height:100%;background:' + barColor + ';border-radius:5px';
+      barBg.appendChild(bar);
+      var pctLabel = document.createElement('div');
+      pctLabel.style.cssText = 'width:130px;flex-shrink:0;font-size:11px;color:var(--text-dim);text-align:right';
+      pctLabel.textContent = y.with_faces.toLocaleString() + ' / ' + y.total.toLocaleString() + ' (' + y.pct + '%)';
+      row.appendChild(yearLabel); row.appendChild(barBg); row.appendChild(pctLabel);
+      progSection.appendChild(row);
+    });
+    body.appendChild(progSection);
+  }
+
   content.innerHTML = '';
   content.appendChild(hdr);
   content.appendChild(body);
