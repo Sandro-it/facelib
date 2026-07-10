@@ -4,6 +4,7 @@ import time
 import threading
 import sqlite3
 import socket
+import base64
 from pathlib import Path
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Request
@@ -46,6 +47,41 @@ def get_db():
     conn.execute("PRAGMA busy_timeout=60000")
     return conn
 
+def get_setting(key, default=None):
+    db = get_db()
+    row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+def set_setting(key, value):
+    db = get_db()
+    with db:
+        db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value)
+        )
+
+@app.middleware("http")
+async def local_network_auth(request: Request, call_next):
+    """Запити з самого комп'ютера (localhost) проходять без перевірки.
+    Запити ззовні (з телефона через локальну мережу) вимагають PIN через HTTP Basic Auth."""
+    client_host = request.client.host if request.client else None
+    if client_host in ("127.0.0.1", "::1", "localhost", None):
+        return await call_next(request)
+    pin = get_setting("access_pin", "1234")
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth[6:]).decode("utf-8")
+            _, _, provided = decoded.partition(":")
+        except Exception:
+            provided = None
+        if provided == pin:
+            return await call_next(request)
+    return JSONResponse(
+        {"detail": "Unauthorized"}, status_code=401,
+        headers={"WWW-Authenticate": 'Basic realm="FaceLib"'}
+    )
+
 def init_db():
     with get_db() as conn:
         conn.executescript("""
@@ -81,6 +117,10 @@ def init_db():
             city TEXT,
             country TEXT,
             cached_at REAL DEFAULT (unixepoch())
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
         );
         CREATE TABLE IF NOT EXISTS tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1269,7 +1309,20 @@ def lan_url(request: Request):
     ip = get_local_ip()
     host_header = request.headers.get("host", "")
     port = host_header.split(":")[-1] if ":" in host_header else "80"
-    return {"url": f"http://{ip}:{port}", "ip": ip, "port": port}
+    pin = get_setting("access_pin", "1234")
+    return {"url": f"http://{ip}:{port}", "ip": ip, "port": port, "pin": pin}
+
+@app.get("/api/settings/pin")
+def get_pin():
+    return {"pin": get_setting("access_pin", "1234")}
+
+@app.post("/api/settings/pin")
+async def update_pin(data: dict):
+    pin = (data.get("pin") or "").strip()
+    if not pin:
+        return JSONResponse({"error": "PIN не може бути порожнім"}, status_code=400)
+    set_setting("access_pin", pin)
+    return {"ok": True, "pin": pin}
 
 @app.get("/api/check-update")
 async def check_update():

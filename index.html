@@ -343,7 +343,14 @@
     <div id="qrContent" style="display:flex;flex-direction:column;align-items:center;gap:12px">
       <div class="spinner"></div>
     </div>
-    <p style="font-size:11px;color:var(--text-dim);margin-top:14px">⚠️ Поки застосунок запущений, цю адресу зможе відкрити будь-хто у вашій мережі — авторизації немає</p>
+    <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:12px;text-align:left">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">PIN для доступу ззовні (телефон попросить його ввести)</div>
+      <div style="display:flex;gap:6px">
+        <input id="pinInput" placeholder="PIN" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;text-align:center">
+        <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px" onclick="savePin()">Змінити</button>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:10px">⚠️ Без PIN ніхто в мережі не потрапить у застосунок — на самому комп'ютері PIN не питається</p>
     <div class="modal-footer" style="justify-content:center">
       <button class="btn btn-secondary" onclick="closeQrModal()">Закрити</button>
     </div>
@@ -2058,12 +2065,36 @@ async function openQrModal() {
   try {
     var r = await fetch('/api/lan-url');
     var d = await r.json();
-    var qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(d.url);
+    document.getElementById('pinInput').value = d.pin || '';
+    // Вбудовуємо PIN в URL (userinfo) - частина браузерів підставить його сама при скануванні
+    var authUrl = d.url.replace('http://', 'http://:' + encodeURIComponent(d.pin) + '@');
+    var qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(authUrl);
     content.innerHTML =
       '<img src="' + qrImgUrl + '" alt="QR" style="border-radius:8px;background:#fff;padding:8px;width:220px;height:220px">' +
-      '<div style="font-size:13px;font-weight:600;user-select:all">' + escapeHtmlDF(d.url) + '</div>';
+      '<div style="font-size:13px;font-weight:600;user-select:all">' + escapeHtmlDF(d.url) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-dim)">Якщо PIN не підставиться сам — введи його вручну: <b style="color:var(--text);user-select:all">' + escapeHtmlDF(d.pin) + '</b></div>';
   } catch (e) {
     content.innerHTML = '<p style="color:var(--red);font-size:12px">Не вдалося визначити адресу в мережі</p>';
+  }
+}
+
+async function savePin() {
+  var input = document.getElementById('pinInput');
+  var pin = (input.value || '').trim();
+  if (!pin) { toast('PIN не може бути порожнім', 'error'); return; }
+  try {
+    var r = await fetch('/api/settings/pin', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pin: pin})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('✓ PIN збережено', 'success');
+      openQrModal(); // перемальовуємо QR з новим PIN
+    } else {
+      toast(d.error || 'Помилка збереження', 'error');
+    }
+  } catch (e) {
+    toast('Помилка збереження PIN', 'error');
   }
 }
 
