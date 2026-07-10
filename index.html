@@ -1115,6 +1115,12 @@ async function openPerson(p) {
   placesBtn.onclick = function() { togglePlaces(p.id); };
   toolbar.appendChild(placesBtn);
 
+  var slideshowBtn = document.createElement('button');
+  slideshowBtn.className = 'gallery-toolbar-btn'; slideshowBtn.id = 'slideshowBtn';
+  slideshowBtn.innerHTML = '🎬 Слайдшоу';
+  slideshowBtn.onclick = function() { startGallerySlideshow(); };
+  toolbar.appendChild(slideshowBtn);
+
   var dateWrap = document.createElement('div'); dateWrap.className = 'date-filter-wrap';
   var dateBtn = document.createElement('button');
   dateBtn.className = 'gallery-toolbar-btn'; dateBtn.id = 'dateFilterBtn';
@@ -1438,6 +1444,8 @@ function openLightbox(idx) {
   document.getElementById('lightbox').classList.add('open');
   renderLb();
 }
+var lbSlideshowMode = false;
+
 function closeLightbox() {
   lbStopPlay();
   document.getElementById('lightbox').classList.remove('open');
@@ -1445,6 +1453,41 @@ function closeLightbox() {
   lbInfoOpen = false;
   var infoPanel = document.getElementById('lbInfoPanel');
   if (infoPanel) infoPanel.classList.remove('open');
+  if (lbSlideshowMode) {
+    lbSlideshowMode = false;
+    var person = allPersonsCache[currentPersonId];
+    if (person) openPerson(person);
+  }
+}
+
+async function startGallerySlideshow() {
+  if (!currentPersonId) return;
+  toast('Завантажую фото для слайдшоу...', 'info');
+  var allPhotos = [];
+  var offset = 0;
+  var batchSize = 500;
+  try {
+    var safetyCounter = 0;
+    while (safetyCounter < 300) {
+      safetyCounter++;
+      var r = await fetch('/api/persons/' + currentPersonId + '/photos?limit=' + batchSize + '&offset=' + offset);
+      var batch = await r.json();
+      if (!batch || !batch.length) break;
+      allPhotos = allPhotos.concat(batch);
+      offset += batch.length;
+      if (batch.length < batchSize) break;
+    }
+  } catch (e) {
+    toast('Помилка завантаження фото для слайдшоу', 'error');
+    return;
+  }
+  if (!allPhotos.length) { toast('Немає фото для показу', 'error'); return; }
+  // Замінюємо currentPhotos повним списком - після закриття лайтбоксу
+  // галерея перемалюється (openPerson), щоб картки знову відповідали індексам
+  currentPhotos = allPhotos;
+  lbSlideshowMode = true;
+  openLightbox(0);
+  lbStartPlay();
 }
 
 // ---- Zoom & Pan ----
