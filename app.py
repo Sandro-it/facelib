@@ -4,6 +4,7 @@ import time
 import threading
 import sqlite3
 import socket
+import base64
 from pathlib import Path
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, Request
@@ -46,6 +47,92 @@ def get_db():
     conn.execute("PRAGMA busy_timeout=60000")
     return conn
 
+def get_setting(key, default=None):
+    db = get_db()
+    row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+def set_setting(key, value):
+    db = get_db()
+    with db:
+        db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value)
+        )
+
+AUTH_COOKIE = "facelib_auth"
+AUTH_PUBLIC_PATHS = {"/api/auth/login"}
+
+LOGIN_PAGE_HTML = """
+<!DOCTYPE html>
+<html lang="uk"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FaceLib</title>
+<style>
+  body{margin:0;background:#0f0f11;color:#e8e8f0;font-family:-apple-system,Segoe UI,sans-serif;
+       display:flex;align-items:center;justify-content:center;height:100vh}
+  .box{background:#1a1a1f;border:1px solid #2e2e35;border-radius:14px;padding:28px 26px;width:260px;text-align:center}
+  h2{margin:0 0 16px;font-size:17px}
+  input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid #2e2e35;
+        background:#242429;color:#e8e8f0;font-size:16px;text-align:center;letter-spacing:2px}
+  button{width:100%;margin-top:10px;padding:10px;border-radius:8px;border:none;
+         background:#6c8fff;color:#0b0b0b;font-weight:600;font-size:14px;cursor:pointer}
+  p{font-size:12px;color:#7878a0;margin-top:10px}
+  #err{color:#f87171;font-size:12px;margin-top:8px;min-height:14px}
+</style></head>
+<body>
+  <div class="box">
+    <h2>📷 FaceLib</h2>
+    <input id="pin" type="password" inputmode="numeric" placeholder="PIN" autofocus>
+    <button onclick="doLogin()">Увійти</button>
+    <div id="err"></div>
+    <p>Введи PIN, встановлений на комп'ютері</p>
+  </div>
+<script>
+async function doLogin() {
+  var pin = document.getElementById('pin').value;
+  var err = document.getElementById('err');
+  err.textContent = '';
+  try {
+    var r = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pin: pin})
+    });
+    if (r.ok) { location.reload(); }
+    else { err.textContent = 'Невірний PIN'; }
+  } catch (e) { err.textContent = 'Помилка з\\'єднання'; }
+}
+document.getElementById('pin').addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+</script>
+</body></html>
+"""
+
+@app.middleware("http")
+async def local_network_auth(request: Request, call_next):
+    """Запити з самого комп'ютера (localhost) проходять без перевірки.
+    Запити ззовні (з телефона через локальну мережу) вимагають PIN — перевірка через cookie,
+    видану після входу через власну сторінку входу (надійніше за HTTP Basic Auth на мобільних)."""
+    client_host = request.client.host if request.client else None
+    if client_host in ("127.0.0.1", "::1", "localhost", None):
+        return await call_next(request)
+    if request.url.path in AUTH_PUBLIC_PATHS:
+        return await call_next(request)
+    pin = get_setting("access_pin", "1234")
+    if request.cookies.get(AUTH_COOKIE) == pin:
+        return await call_next(request)
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        return HTMLResponse(LOGIN_PAGE_HTML, status_code=401)
+    return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+@app.post("/api/auth/login")
+async def auth_login(data: dict):
+    pin = get_setting("access_pin", "1234")
+    if (data.get("pin") or "").strip() == pin:
+        resp = JSONResponse({"ok": True})
+        resp.set_cookie(AUTH_COOKIE, pin, max_age=60 * 60 * 24 * 30, path="/")
+        return resp
+    return JSONResponse({"ok": False, "error": "Невірний PIN"}, status_code=401)
+
 def init_db():
     with get_db() as conn:
         conn.executescript("""
@@ -81,6 +168,10 @@ def init_db():
             city TEXT,
             country TEXT,
             cached_at REAL DEFAULT (unixepoch())
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
         );
         CREATE TABLE IF NOT EXISTS tags (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1269,7 +1360,20 @@ def lan_url(request: Request):
     ip = get_local_ip()
     host_header = request.headers.get("host", "")
     port = host_header.split(":")[-1] if ":" in host_header else "80"
-    return {"url": f"http://{ip}:{port}", "ip": ip, "port": port}
+    pin = get_setting("access_pin", "1234")
+    return {"url": f"http://{ip}:{port}", "ip": ip, "port": port, "pin": pin}
+
+@app.get("/api/settings/pin")
+def get_pin():
+    return {"pin": get_setting("access_pin", "1234")}
+
+@app.post("/api/settings/pin")
+async def update_pin(data: dict):
+    pin = (data.get("pin") or "").strip()
+    if not pin:
+        return JSONResponse({"error": "PIN не може бути порожнім"}, status_code=400)
+    set_setting("access_pin", pin)
+    return {"ok": True, "pin": pin}
 
 @app.get("/api/check-update")
 async def check_update():
