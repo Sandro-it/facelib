@@ -251,6 +251,7 @@
           <button class="btn btn-secondary" id="btnStop" style="display:none" onclick="stopIndexer()">⏹ Стоп</button>
         </div>
         <button class="btn btn-secondary" onclick="doCluster()">🔗 Групувати обличчя</button>
+        <button class="btn btn-secondary" onclick="openArchiveStats()">📊 Статистика архіву</button>
       </div>
       <div class="progress-wrap" id="progressWrap">
         <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
@@ -1369,6 +1370,125 @@ async function openPerson(p) {
   currentAbort = new AbortController();
   await loadYear(allYearsOriginal[0], currentAbort.signal);
   setTimeout(updateTimelineIndicator, 100);
+}
+
+async function openArchiveStats() {
+  currentPersonId = null;
+  currentPhotos = [];
+  document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
+  var content = document.getElementById('contentArea');
+  content.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Рахую статистику...</p></div>';
+
+  var d;
+  try {
+    var r = await fetch('/api/stats');
+    d = await r.json();
+  } catch (e) {
+    content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Не вдалося завантажити статистику</p></div>';
+    return;
+  }
+
+  var hdr = document.createElement('div'); hdr.className = 'content-header';
+  var h2 = document.createElement('h2'); h2.textContent = '📊 Статистика архіву';
+  var closeBtn = document.createElement('button'); closeBtn.className = 'close-gallery-btn';
+  closeBtn.textContent = '✕ Закрити'; closeBtn.onclick = function(){ closeGallery(); };
+  hdr.appendChild(h2); hdr.appendChild(closeBtn);
+
+  var body = document.createElement('div');
+  body.style.cssText = 'padding:20px;overflow-y:auto;flex:1;box-sizing:border-box';
+
+  // Підсумкові картки
+  var cards = document.createElement('div');
+  cards.style.cssText = 'display:flex;gap:14px;margin-bottom:28px;flex-wrap:wrap';
+  var cardDefs = [
+    ['📷', d.photos_total, 'фото'],
+    ['🙂', d.faces_total, 'облич'],
+    ['👤', d.persons_total, 'людей']
+  ];
+  cardDefs.forEach(function(cd) {
+    var card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 22px;min-width:140px';
+    card.innerHTML = '<div style="font-size:22px">' + cd[0] + '</div>' +
+      '<div style="font-size:22px;font-weight:700;margin-top:4px">' + cd[1].toLocaleString() + '</div>' +
+      '<div style="font-size:12px;color:var(--text-dim)">' + cd[2] + '</div>';
+    cards.appendChild(card);
+  });
+  body.appendChild(cards);
+
+  // Фото по роках (вертикальні стовпчики)
+  if (d.by_year && d.by_year.length) {
+    var yearSection = document.createElement('div');
+    yearSection.style.cssText = 'margin-bottom:28px';
+    yearSection.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Фото по роках</div>';
+    var maxYearCount = Math.max.apply(null, d.by_year.map(function(y){ return y.count; }));
+    var chart = document.createElement('div');
+    chart.style.cssText = 'display:flex;align-items:flex-end;gap:6px;height:160px;padding:0 4px';
+    d.by_year.forEach(function(y) {
+      var barWrap = document.createElement('div');
+      barWrap.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:24px';
+      var barLabel = document.createElement('div');
+      barLabel.style.cssText = 'font-size:10px;color:var(--text-dim);margin-bottom:4px';
+      barLabel.textContent = y.count.toLocaleString();
+      var bar = document.createElement('div');
+      var heightPct = Math.max(4, Math.round((y.count / maxYearCount) * 100));
+      bar.style.cssText = 'width:100%;background:var(--accent);border-radius:4px 4px 0 0;height:' + heightPct + '%';
+      bar.title = y.year + ': ' + y.count + ' фото';
+      var yearLabel = document.createElement('div');
+      yearLabel.style.cssText = 'font-size:11px;color:var(--text-dim);margin-top:6px';
+      yearLabel.textContent = y.year;
+      barWrap.appendChild(barLabel); barWrap.appendChild(bar); barWrap.appendChild(yearLabel);
+      chart.appendChild(barWrap);
+    });
+    yearSection.appendChild(chart);
+    body.appendChild(yearSection);
+  }
+
+  // Топ людей та топ локацій - горизонтальні стовпчики поруч
+  var cols = document.createElement('div');
+  cols.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap';
+
+  function buildHBarSection(title, items, labelKey, onClickItem) {
+    var section = document.createElement('div');
+    section.style.cssText = 'flex:1;min-width:280px';
+    section.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">' + title + '</div>';
+    if (!items || !items.length) {
+      section.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає даних</div>';
+      return section;
+    }
+    var maxCount = Math.max.apply(null, items.map(function(it){ return it.count; }));
+    items.forEach(function(it) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px' + (onClickItem ? ';cursor:pointer' : '');
+      var label = document.createElement('div');
+      label.style.cssText = 'width:120px;flex-shrink:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      label.textContent = it[labelKey];
+      var barBg = document.createElement('div');
+      barBg.style.cssText = 'flex:1;background:var(--surface2);border-radius:5px;height:18px;position:relative;overflow:hidden';
+      var widthPct = Math.max(3, Math.round((it.count / maxCount) * 100));
+      var bar = document.createElement('div');
+      bar.style.cssText = 'width:' + widthPct + '%;height:100%;background:var(--accent);border-radius:5px';
+      barBg.appendChild(bar);
+      var count = document.createElement('div');
+      count.style.cssText = 'width:44px;flex-shrink:0;font-size:12px;color:var(--text-dim);text-align:right';
+      count.textContent = it.count.toLocaleString();
+      row.appendChild(label); row.appendChild(barBg); row.appendChild(count);
+      if (onClickItem) row.onclick = function(){ onClickItem(it); };
+      section.appendChild(row);
+    });
+    return section;
+  }
+
+  cols.appendChild(buildHBarSection('Топ людей за кількістю фото', d.top_people, 'name', function(it) {
+    fetch('/api/persons/' + it.id).then(function(r){ return r.json(); }).then(function(person){
+      if (person && person.id) openPerson(person);
+    });
+  }));
+  cols.appendChild(buildHBarSection('Топ локацій', d.top_places, 'city', null));
+
+  body.appendChild(cols);
+  content.innerHTML = '';
+  content.appendChild(hdr);
+  content.appendChild(body);
 }
 
 function closeGallery() {
