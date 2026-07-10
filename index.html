@@ -559,6 +559,21 @@ function openMoveToExistingModal() {
     renderMergeList(persons.filter(function(p){ return p.id !== currentPersonId; }));
   });
 }
+
+function openDuplicateModal() {
+  if (!selectedPhotoIds.size) return;
+  document.getElementById('mergeSearch').value = '';
+  var modal = document.getElementById('mergeModal');
+  modal.classList.add('open');
+  modal.dataset.mode = 'duplicate';
+  var title = modal.querySelector('h3');
+  if (title) title.textContent = '🔗 Дублювати фото до...';
+  fetch('/api/persons').then(function(r){ return r.json(); }).then(function(persons){
+    allPersonsCache = {};
+    persons.forEach(function(p){ allPersonsCache[p.id] = p; });
+    renderMergeList(persons.filter(function(p){ return p.id !== currentPersonId; }));
+  });
+}
 var loadedYears = {};    // yr -> true коли завантажено
 var bottomYearIdx = 0;  // індекс наступного року для завантаження вниз (scroll)
 var topYearIdx = -1;    // індекс наступного року для завантаження вгору (кнопка)
@@ -1167,11 +1182,13 @@ async function openPerson(p) {
   removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
   var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
+  var duplicateBtn = document.createElement('button'); duplicateBtn.className = 'btn btn-secondary'; duplicateBtn.textContent = '🔗 Дублювати в іншу людину';
+  duplicateBtn.onclick = function(){ openDuplicateModal(); };
   var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
   saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
   var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
   cancelSelBtn.onclick = function(){ clearSelection(); };
-  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
+  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(duplicateBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
 
   galleryWrap.appendChild(grid);
   galleryWrap.appendChild(selBar);
@@ -1927,6 +1944,7 @@ function renderMergeList(persons) {
   var modal = document.getElementById('mergeModal');
   var isMove = modal.dataset.mode === 'move';
   var isShared = modal.dataset.mode === 'shared';
+  var isDuplicate = modal.dataset.mode === 'duplicate';
   persons.filter(function(p){ return p.id !== mergeSourceId; }).forEach(function(p) {
     var item = document.createElement('div'); item.className = 'modal-item';
     var avatar;
@@ -1942,6 +1960,8 @@ function renderMergeList(persons) {
     } else if (isShared) {
       if (selectedSharedIds.has(p.id)) item.classList.add('selected');
       item.addEventListener('click', (function(pid, itemEl){ return function(){ toggleSharedSelection(pid, itemEl); }; })(p.id, item));
+    } else if (isDuplicate) {
+      item.addEventListener('click', (function(dstId, dstName){ return function(){ clickDuplicate(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
     } else {
       item.addEventListener('click', (function(dstId, dstName){ return function(){ clickMerge(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
     }
@@ -1996,6 +2016,21 @@ async function clickMove(dstId, dstName) {
   } else {
     toastHeader('Помилка переміщення', 'error');
   }
+}
+
+async function clickDuplicate(dstId, dstName) {
+  var ids = Array.from(selectedPhotoIds);
+  closeMergeModal();
+  var okCount = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      var r = await fetch('/api/photos/' + ids[i] + '/duplicate-to/' + dstId, {method: 'POST'});
+      if (r.ok) okCount++;
+    } catch (e) { /* пропускаємо, рахуємо тільки успішні */ }
+  }
+  clearSelection();
+  toastHeader('🔗 ' + okCount + ' фото додано до «' + dstName + '» (лишились і тут)', 'success');
+  loadPersons(null);
 }
 
 // ---------------------------------------------------------------------------

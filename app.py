@@ -169,6 +169,13 @@ def init_db():
             country TEXT,
             cached_at REAL DEFAULT (unixepoch())
         );
+        CREATE TABLE IF NOT EXISTS manual_photo_links (
+            photo_id INTEGER NOT NULL,
+            person_id INTEGER NOT NULL,
+            PRIMARY KEY (photo_id, person_id),
+            FOREIGN KEY(photo_id) REFERENCES photos(id),
+            FOREIGN KEY(person_id) REFERENCES persons(id)
+        );
         CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
@@ -193,6 +200,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_persons_name ON persons(name);
         CREATE INDEX IF NOT EXISTS idx_person_tags_person ON person_tags(person_id);
         CREATE INDEX IF NOT EXISTS idx_person_tags_tag ON person_tags(tag_id);
+        CREATE INDEX IF NOT EXISTS idx_manual_links_person ON manual_photo_links(person_id);
+        CREATE INDEX IF NOT EXISTS idx_manual_links_photo ON manual_photo_links(photo_id);
+        CREATE VIEW IF NOT EXISTS person_photo_links AS
+            SELECT photo_id, person_id FROM faces WHERE person_id IS NOT NULL
+            UNION
+            SELECT photo_id, person_id FROM manual_photo_links;
         """)
 
 # Ensure indexes exist (for existing databases)
@@ -604,7 +617,7 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
         params.extend([limit, offset])
         rows = db.execute(f"""
             SELECT p.id, p.name, p.cover_face_id, {fav_col} as is_favorite, {order_col} as sort_order,
-                   (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
+                   (SELECT COUNT(DISTINCT photo_id) FROM person_photo_links WHERE person_id=p.id) as photo_count
             FROM persons p
             {tag_join}
             {where_clause}
@@ -762,7 +775,7 @@ def get_person(person_id: int):
     db = get_db()
     r = db.execute("""
         SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-               (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
+               (SELECT COUNT(DISTINCT photo_id) FROM person_photo_links WHERE person_id=p.id) as photo_count
         FROM persons p WHERE p.id=?
     """, (person_id,)).fetchone()
     if not r: return JSONResponse({"error": "not found"}, status_code=404)
@@ -852,7 +865,7 @@ def person_places(person_id: int):
     db = get_db()
     photos = db.execute("""
         SELECT ph.id, ph.path, ph.city, ph.country FROM photos ph
-        JOIN faces f ON f.photo_id = ph.id
+        JOIN person_photo_links f ON f.photo_id = ph.id
         WHERE f.person_id = ?
         GROUP BY ph.id
     """, (person_id,)).fetchall()
@@ -906,7 +919,7 @@ def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int
     if city == "Без локації":
         rows = db.execute("""
             SELECT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ? AND (ph.city = '' OR ph.city IS NULL)
             GROUP BY ph.id
             ORDER BY ph.taken_at DESC
@@ -915,7 +928,7 @@ def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int
     else:
         rows = db.execute("""
             SELECT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ? AND ph.city = ?
             GROUP BY ph.id
             ORDER BY ph.taken_at DESC
@@ -947,7 +960,7 @@ def person_years(person_id: int):
     rows = db.execute("""
         SELECT DISTINCT CAST(strftime('%Y', datetime(ph.taken_at, 'unixepoch')) AS INTEGER) as year
         FROM photos ph
-        JOIN faces f ON f.photo_id = ph.id
+        JOIN person_photo_links f ON f.photo_id = ph.id
         WHERE f.person_id = ? AND ph.taken_at IS NOT NULL
         ORDER BY year DESC
     """, (person_id,)).fetchall()
@@ -969,7 +982,7 @@ def shared_photos(person_ids: str, limit: int = 200, offset: int = 0):
     rows = db.execute(f"""
         SELECT ph.id, ph.path, ph.taken_at FROM photos ph
         JOIN (
-            SELECT photo_id FROM faces
+            SELECT photo_id FROM person_photo_links
             WHERE person_id IN ({placeholders})
             GROUP BY photo_id
             HAVING COUNT(DISTINCT person_id) = ?
@@ -1008,7 +1021,7 @@ def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int =
             ts_to = time.time()
         rows = db.execute("""
             SELECT DISTINCT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ? AND ph.taken_at BETWEEN ? AND ?
             ORDER BY ph.taken_at DESC
             LIMIT ? OFFSET ?
@@ -1018,7 +1031,7 @@ def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int =
         year_end = datetime.datetime(year, 12, 31, 23, 59, 59).timestamp()
         rows = db.execute("""
             SELECT DISTINCT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ? AND ph.taken_at BETWEEN ? AND ?
             ORDER BY ph.taken_at DESC
             LIMIT ? OFFSET ?
@@ -1026,7 +1039,7 @@ def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int =
     else:
         rows = db.execute("""
             SELECT DISTINCT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ?
             ORDER BY ph.taken_at DESC NULLS LAST
             LIMIT ? OFFSET ?
@@ -1132,7 +1145,29 @@ def delete_person(person_id: int):
     db = get_db()
     with db:
         db.execute("DELETE FROM faces WHERE person_id=?", (person_id,))
+        db.execute("DELETE FROM manual_photo_links WHERE person_id=?", (person_id,))
         db.execute("DELETE FROM persons WHERE id=?", (person_id,))
+    return {"ok": True}
+
+@app.post("/api/photos/{photo_id}/duplicate-to/{person_id}")
+def duplicate_photo_to_person(photo_id: int, person_id: int):
+    """Додає фото в галерею іншої людини без переміщення (без реального обличчя)."""
+    db = get_db()
+    with db:
+        db.execute(
+            "INSERT OR IGNORE INTO manual_photo_links (photo_id, person_id) VALUES (?, ?)",
+            (photo_id, person_id)
+        )
+    return {"ok": True}
+
+@app.delete("/api/photos/{photo_id}/duplicate-to/{person_id}")
+def remove_duplicate_link(photo_id: int, person_id: int):
+    db = get_db()
+    with db:
+        db.execute(
+            "DELETE FROM manual_photo_links WHERE photo_id=? AND person_id=?",
+            (photo_id, person_id)
+        )
     return {"ok": True}
 
 @app.post("/api/photos/{photo_id}/unlink")
@@ -1141,6 +1176,7 @@ def unlink_photo(photo_id: int):
     db = get_db()
     with db:
         db.execute("UPDATE faces SET person_id=NULL WHERE photo_id=?", (photo_id,))
+        db.execute("DELETE FROM manual_photo_links WHERE photo_id=?", (photo_id,))
     return {"ok": True}
 
 @app.get("/api/photos/{photo_id}/face-for-person/{person_id}")
