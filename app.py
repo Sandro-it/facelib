@@ -3,9 +3,10 @@ import json
 import time
 import threading
 import sqlite3
+import socket
 from pathlib import Path
 import numpy as np
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -1252,6 +1253,24 @@ def browse_folder():
 def get_version():
     return {"version": VERSION}
 
+def get_local_ip():
+    """Визначає IP-адресу цього комп'ютера в локальній мережі (без реального надсилання пакетів)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+@app.get("/api/lan-url")
+def lan_url(request: Request):
+    ip = get_local_ip()
+    host_header = request.headers.get("host", "")
+    port = host_header.split(":")[-1] if ":" in host_header else "80"
+    return {"url": f"http://{ip}:{port}", "ip": ip, "port": port}
+
 @app.get("/api/check-update")
 async def check_update():
     import urllib.request
@@ -1323,4 +1342,4 @@ def root():
     return FileResponse("index.html")
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="127.0.0.1", port=7788, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=7788, reload=False)

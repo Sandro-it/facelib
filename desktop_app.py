@@ -149,7 +149,7 @@ def start_server():
     venv_python = os.path.join(dir_path, ".venv", "Scripts", "python.exe")
     python = venv_python if os.path.exists(venv_python) else sys.executable
     server_process = subprocess.Popen(
-        [python, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "7789"],
+        [python, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7789"],
         cwd=dir_path,
         creationflags=subprocess.CREATE_NO_WINDOW
     )

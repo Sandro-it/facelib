@@ -238,6 +238,7 @@
       <span class="dot" id="statusDot"></span><span id="statusText">Завантаження...</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
+      <button id="qrBtn" class="btn btn-secondary" style="font-size:11px;padding:3px 10px" onclick="openQrModal()" title="Відкрити на телефоні через локальну мережу">📱 QR</button>
       <span id="versionBadge" style="font-size:11px;color:var(--text-dim)"></span>
       <button id="updateBtn" class="btn btn-secondary" style="display:none;font-size:11px;padding:3px 10px" onclick="checkAndUpdate()">🔄 Оновити</button>
     </div>
@@ -330,6 +331,21 @@
       <span id="sharedCount" style="display:none;font-size:12px;color:var(--text-dim);margin-right:auto"></span>
       <button class="btn btn-primary" id="sharedFindBtn" style="display:none" onclick="submitSharedSearch()">🖇️ Знайти спільні фото</button>
       <button class="btn btn-secondary" onclick="closeMergeModal()">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR / локальна мережа -->
+<div class="modal-bg" id="qrModal" onclick="if(event.target===this)closeQrModal()">
+  <div class="modal" style="text-align:center;max-width:320px">
+    <h3>📱 Відкрити на телефоні</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:4px 0 14px">Телефон має бути в тій самій Wi-Fi мережі, що й цей комп'ютер</p>
+    <div id="qrContent" style="display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div class="spinner"></div>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:14px">⚠️ Поки застосунок запущений, цю адресу зможе відкрити будь-хто у вашій мережі — авторизації немає</p>
+    <div class="modal-footer" style="justify-content:center">
+      <button class="btn btn-secondary" onclick="closeQrModal()">Закрити</button>
     </div>
   </div>
 </div>
@@ -2034,6 +2050,27 @@ async function openInExplorerPath(path) {
 // Init
 // ---------------------------------------------------------------------------
 // Version and update check
+async function openQrModal() {
+  var modal = document.getElementById('qrModal');
+  var content = document.getElementById('qrContent');
+  modal.classList.add('open');
+  content.innerHTML = '<div class="spinner"></div>';
+  try {
+    var r = await fetch('/api/lan-url');
+    var d = await r.json();
+    var qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(d.url);
+    content.innerHTML =
+      '<img src="' + qrImgUrl + '" alt="QR" style="border-radius:8px;background:#fff;padding:8px;width:220px;height:220px">' +
+      '<div style="font-size:13px;font-weight:600;user-select:all">' + escapeHtmlDF(d.url) + '</div>';
+  } catch (e) {
+    content.innerHTML = '<p style="color:var(--red);font-size:12px">Не вдалося визначити адресу в мережі</p>';
+  }
+}
+
+function closeQrModal() {
+  document.getElementById('qrModal').classList.remove('open');
+}
+
 async function initVersion() {
   try {
     var r = await fetch('/api/version');
