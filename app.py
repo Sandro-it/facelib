@@ -555,6 +555,13 @@ def archive_stats():
     """).fetchall()
     top_places = [{"city": r["city"], "country": r["country"] or "", "count": r["cnt"]} for r in place_rows]
 
+    top_tagged_rows = db.execute("""
+        SELECT p.id, p.name, COUNT(pt.tag_id) as cnt
+        FROM persons p JOIN person_tags pt ON pt.person_id = p.id
+        GROUP BY p.id ORDER BY cnt DESC LIMIT 12
+    """).fetchall()
+    top_tagged = [{"id": r["id"], "name": r["name"] or "Без імені", "count": r["cnt"]} for r in top_tagged_rows]
+
     return {
         "photos_total": photos_total,
         "faces_total": faces_total,
@@ -562,6 +569,7 @@ def archive_stats():
         "by_year": by_year,
         "top_people": top_people,
         "top_places": top_places,
+        "top_tagged": top_tagged,
     }
 
 @app.get("/api/status")

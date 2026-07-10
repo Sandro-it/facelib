@@ -1484,6 +1484,11 @@ async function openArchiveStats() {
     });
   }));
   cols.appendChild(buildHBarSection('Топ локацій', d.top_places, 'city', null));
+  cols.appendChild(buildHBarSection('Топ за кількістю тегів', d.top_tagged, 'name', function(it) {
+    fetch('/api/persons/' + it.id).then(function(r){ return r.json(); }).then(function(person){
+      if (person && person.id) openPerson(person);
+    });
+  }));
 
   body.appendChild(cols);
   content.innerHTML = '';
