@@ -478,6 +478,16 @@ function updateSelectionBarLayout() {
     var padRight = parseFloat(style.paddingRight) || 0;
     return bar.getBoundingClientRect().width - padLeft - padRight;
   }
+  function showDebug(text) {
+    var dbg = document.getElementById('selBarDebug');
+    if (!dbg) {
+      dbg = document.createElement('div');
+      dbg.id = 'selBarDebug';
+      dbg.style.cssText = 'position:fixed;top:4px;left:4px;z-index:999;background:#000;color:#0f0;font-family:monospace;font-size:11px;padding:4px 8px;border-radius:4px;pointer-events:none;white-space:pre';
+      document.body.appendChild(dbg);
+    }
+    dbg.textContent = text;
+  }
 
   // 1. Знімаємо стиснення і ПРИМУСОВО змушуємо браузер перемалювати синхронно
   //    (читання offsetHeight форсує reflow тут і зараз - без очікування rAF/таймерів,
@@ -486,10 +496,17 @@ function updateSelectionBarLayout() {
   void bar.offsetHeight;
 
   var available = availableWidth();
-  if (available < 10) return; // лейаут ще не готовий (напр. панель щойно з'явилась)
+  if (available < 10) {
+    showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' (ЛЕЙАУТ НЕ ГОТОВИЙ)');
+    return;
+  }
 
   // 2. Повний розмір влазить в один рядок - лишаємо як є
-  if (sumChildrenWidth() <= available) return;
+  var fullNeeded = sumChildrenWidth();
+  if (fullNeeded <= available) {
+    showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' fullNeeded=' + Math.round(fullNeeded) + ' -> ПОВНИЙ');
+    return;
+  }
 
   // 3. Пробуємо стиснутий розмір (менші відступи/шрифт, текст лишається)
   bar.classList.add('tight');
@@ -497,11 +514,15 @@ function updateSelectionBarLayout() {
   var tightNeeded = sumChildrenWidth();
   // Дозволяємо перенесення на 1-2 додаткові рядки в стиснутому вигляді з текстом -
   // тільки якщо навіть цього не вистачить (знадобилось би 3+ рядки), переходимо на іконки
-  if (tightNeeded <= available * 2.2) return;
+  if (tightNeeded <= available * 2.2) {
+    showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' fullNeeded=' + Math.round(fullNeeded) + ' tightNeeded=' + Math.round(tightNeeded) + ' -> СТИСНУТИЙ');
+    return;
+  }
 
   bar.classList.remove('tight');
   bar.classList.add('icons-only');
   void bar.offsetHeight;
+  showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' fullNeeded=' + Math.round(fullNeeded) + ' tightNeeded=' + Math.round(tightNeeded) + ' -> ІКОНКИ');
 }
 
 window.addEventListener('resize', function() {
