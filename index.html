@@ -579,7 +579,7 @@ function openDuplicateModal() {
   modal.classList.add('open');
   modal.dataset.mode = 'duplicate';
   var title = modal.querySelector('h3');
-  if (title) title.textContent = '🔗 Дублювати фото до...';
+  if (title) title.textContent = '👥 Дублювати фото до...';
   fetch('/api/persons').then(function(r){ return r.json(); }).then(function(persons){
     allPersonsCache = {};
     persons.forEach(function(p){ allPersonsCache[p.id] = p; });
@@ -1208,11 +1208,11 @@ async function openPerson(p) {
   removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
   var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
-  var duplicateBtn = document.createElement('button'); duplicateBtn.className = 'btn btn-secondary'; duplicateBtn.textContent = '🔗 Дублювати в іншу людину';
+  var duplicateBtn = document.createElement('button'); duplicateBtn.className = 'btn btn-secondary'; duplicateBtn.textContent = '👥 Дублювати в іншу людину';
   duplicateBtn.onclick = function(){ openDuplicateModal(); };
   var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
   saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
-  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
+  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = '↩️ Скасувати';
   cancelSelBtn.onclick = function(){ clearSelection(); };
   selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(duplicateBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
 
@@ -2885,7 +2885,7 @@ function openSharedPhotosView(personIds, names) {
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
   var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
   saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
-  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
+  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = '↩️ Скасувати';
   cancelSelBtn.onclick = function(){ clearSelection(); };
   selBar.appendChild(selCount); selBar.appendChild(shareSelBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
 
