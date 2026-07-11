@@ -1385,6 +1385,10 @@ async function openArchiveStats() {
   try {
     var r = await fetch('/api/stats');
     d = await r.json();
+    if (!r.ok || d.error) {
+      content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Не вдалося завантажити статистику' + (d.error ? ':<br><span style="font-size:11px;color:var(--text-dim)">' + escapeHtmlDF(d.error) + '</span>' : '') + '</p></div>';
+      return;
+    }
   } catch (e) {
     content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Не вдалося завантажити статистику</p></div>';
     return;
