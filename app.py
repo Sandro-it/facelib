@@ -3,9 +3,11 @@ import json
 import time
 import threading
 import sqlite3
+import socket
+import base64
 from pathlib import Path
 import numpy as np
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,6 +18,8 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 VERSION = "1.3"
 GITHUB_REPO = "Sandro-it/facelib"
+
+TAG_COLORS = ["#4a9e4a", "#d4713a", "#3a7ad4", "#c94a7a", "#a15fd4", "#d4b83a", "#4ad4c4", "#d44a4a"]
 
 DB_PATH = "facelib.db"
 THUMBS_DIR = Path("static/thumbs")
@@ -42,6 +46,92 @@ def get_db():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=60000")
     return conn
+
+def get_setting(key, default=None):
+    db = get_db()
+    row = db.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+def set_setting(key, value):
+    db = get_db()
+    with db:
+        db.execute(
+            "INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value)
+        )
+
+AUTH_COOKIE = "facelib_auth"
+AUTH_PUBLIC_PATHS = {"/api/auth/login"}
+
+LOGIN_PAGE_HTML = """
+<!DOCTYPE html>
+<html lang="uk"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FaceLib</title>
+<style>
+  body{margin:0;background:#0f0f11;color:#e8e8f0;font-family:-apple-system,Segoe UI,sans-serif;
+       display:flex;align-items:center;justify-content:center;height:100vh}
+  .box{background:#1a1a1f;border:1px solid #2e2e35;border-radius:14px;padding:28px 26px;width:260px;text-align:center}
+  h2{margin:0 0 16px;font-size:17px}
+  input{width:100%;box-sizing:border-box;padding:10px 12px;border-radius:8px;border:1px solid #2e2e35;
+        background:#242429;color:#e8e8f0;font-size:16px;text-align:center;letter-spacing:2px}
+  button{width:100%;margin-top:10px;padding:10px;border-radius:8px;border:none;
+         background:#6c8fff;color:#0b0b0b;font-weight:600;font-size:14px;cursor:pointer}
+  p{font-size:12px;color:#7878a0;margin-top:10px}
+  #err{color:#f87171;font-size:12px;margin-top:8px;min-height:14px}
+</style></head>
+<body>
+  <div class="box">
+    <h2>📷 FaceLib</h2>
+    <input id="pin" type="password" inputmode="numeric" placeholder="PIN" autofocus>
+    <button onclick="doLogin()">Увійти</button>
+    <div id="err"></div>
+    <p>Введи PIN, встановлений на комп'ютері</p>
+  </div>
+<script>
+async function doLogin() {
+  var pin = document.getElementById('pin').value;
+  var err = document.getElementById('err');
+  err.textContent = '';
+  try {
+    var r = await fetch('/api/auth/login', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pin: pin})
+    });
+    if (r.ok) { location.reload(); }
+    else { err.textContent = 'Невірний PIN'; }
+  } catch (e) { err.textContent = 'Помилка з\\'єднання'; }
+}
+document.getElementById('pin').addEventListener('keydown', function(e){ if (e.key === 'Enter') doLogin(); });
+</script>
+</body></html>
+"""
+
+@app.middleware("http")
+async def local_network_auth(request: Request, call_next):
+    """Запити з самого комп'ютера (localhost) проходять без перевірки.
+    Запити ззовні (з телефона через локальну мережу) вимагають PIN — перевірка через cookie,
+    видану після входу через власну сторінку входу (надійніше за HTTP Basic Auth на мобільних)."""
+    client_host = request.client.host if request.client else None
+    if client_host in ("127.0.0.1", "::1", "localhost", None):
+        return await call_next(request)
+    if request.url.path in AUTH_PUBLIC_PATHS:
+        return await call_next(request)
+    pin = get_setting("access_pin", "1234")
+    if request.cookies.get(AUTH_COOKIE) == pin:
+        return await call_next(request)
+    accept = request.headers.get("accept", "")
+    if "text/html" in accept:
+        return HTMLResponse(LOGIN_PAGE_HTML, status_code=401)
+    return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+
+@app.post("/api/auth/login")
+async def auth_login(data: dict):
+    pin = get_setting("access_pin", "1234")
+    if (data.get("pin") or "").strip() == pin:
+        resp = JSONResponse({"ok": True})
+        resp.set_cookie(AUTH_COOKIE, pin, max_age=60 * 60 * 24 * 30, path="/")
+        return resp
+    return JSONResponse({"ok": False, "error": "Невірний PIN"}, status_code=401)
 
 def init_db():
     with get_db() as conn:
@@ -79,10 +169,43 @@ def init_db():
             country TEXT,
             cached_at REAL DEFAULT (unixepoch())
         );
+        CREATE TABLE IF NOT EXISTS manual_photo_links (
+            photo_id INTEGER NOT NULL,
+            person_id INTEGER NOT NULL,
+            PRIMARY KEY (photo_id, person_id),
+            FOREIGN KEY(photo_id) REFERENCES photos(id),
+            FOREIGN KEY(person_id) REFERENCES persons(id)
+        );
+        CREATE TABLE IF NOT EXISTS settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        );
+        CREATE TABLE IF NOT EXISTS tags (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            color TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS person_tags (
+            person_id INTEGER NOT NULL,
+            tag_id INTEGER NOT NULL,
+            is_favorite INTEGER DEFAULT 0,
+            sort_order INTEGER DEFAULT 0,
+            PRIMARY KEY (person_id, tag_id),
+            FOREIGN KEY(person_id) REFERENCES persons(id),
+            FOREIGN KEY(tag_id) REFERENCES tags(id)
+        );
         CREATE INDEX IF NOT EXISTS idx_faces_person ON faces(person_id);
         CREATE INDEX IF NOT EXISTS idx_faces_photo ON faces(photo_id);
         CREATE INDEX IF NOT EXISTS idx_faces_person_photo ON faces(person_id, photo_id);
         CREATE INDEX IF NOT EXISTS idx_persons_name ON persons(name);
+        CREATE INDEX IF NOT EXISTS idx_person_tags_person ON person_tags(person_id);
+        CREATE INDEX IF NOT EXISTS idx_person_tags_tag ON person_tags(tag_id);
+        CREATE INDEX IF NOT EXISTS idx_manual_links_person ON manual_photo_links(person_id);
+        CREATE INDEX IF NOT EXISTS idx_manual_links_photo ON manual_photo_links(photo_id);
+        CREATE VIEW IF NOT EXISTS person_photo_links AS
+            SELECT photo_id, person_id FROM faces WHERE person_id IS NOT NULL
+            UNION
+            SELECT photo_id, person_id FROM manual_photo_links;
         """)
 
 # Ensure indexes exist (for existing databases)
@@ -100,6 +223,20 @@ def ensure_migrations():
             conn.execute("ALTER TABLE persons ADD COLUMN is_favorite INTEGER DEFAULT 0")
         if 'sort_order' not in cols:
             conn.execute("ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
+        if 'note' not in cols:
+            conn.execute("ALTER TABLE persons ADD COLUMN note TEXT")
+        # Add per-tag favorite/order columns if not exist
+        pt_cols = [r[1] for r in conn.execute("PRAGMA table_info(person_tags)").fetchall()]
+        if 'is_favorite' not in pt_cols:
+            conn.execute("ALTER TABLE person_tags ADD COLUMN is_favorite INTEGER DEFAULT 0")
+        if 'sort_order' not in pt_cols:
+            conn.execute("ALTER TABLE person_tags ADD COLUMN sort_order INTEGER DEFAULT 0")
+        # Add size/camera cache columns for stats (lazy-filled, like city/country)
+        photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]
+        if 'size' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN size INTEGER")
+        if 'camera' not in photo_cols:
+            conn.execute("ALTER TABLE photos ADD COLUMN camera TEXT")
         # Add geo_cache table if not exists
         conn.execute("""
             CREATE TABLE IF NOT EXISTS geo_cache (
@@ -396,6 +533,153 @@ def run_indexer():
 # API
 # ---------------------------------------------------------------------------
 
+STATS_FILL_CAP = 3000  # скільки фото сканувати на диску за один запит статистики (лениве кешування)
+
+def _fill_missing_size_camera(db):
+    rows = db.execute("SELECT id, path FROM photos WHERE size IS NULL OR camera IS NULL LIMIT ?", (STATS_FILL_CAP,)).fetchall()
+    for r in rows:
+        try:
+            size = os.path.getsize(r["path"])
+        except OSError:
+            size = 0
+        camera = get_camera_from_exif(r["path"]) or ""
+        db.execute("UPDATE photos SET size=?, camera=? WHERE id=?", (size, camera, r["id"]))
+    if rows:
+        db.commit()
+    return len(rows)
+
+@app.get("/api/stats")
+def archive_stats():
+    import datetime
+    db = get_db()
+    photos_total = db.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
+    faces_total = db.execute("SELECT COUNT(*) FROM faces").fetchone()[0]
+    persons_total = db.execute("SELECT COUNT(*) FROM persons").fetchone()[0]
+
+    year_rows = db.execute("""
+        SELECT CAST(strftime('%Y', datetime(taken_at, 'unixepoch')) AS INTEGER) as year, COUNT(*) as cnt
+        FROM photos WHERE taken_at IS NOT NULL
+        GROUP BY year ORDER BY year
+    """).fetchall()
+    by_year = [{"year": r["year"], "count": r["cnt"]} for r in year_rows if r["year"]]
+
+    top_people_rows = db.execute("""
+        SELECT p.id, p.name, COUNT(DISTINCT ppl.photo_id) as cnt
+        FROM persons p JOIN person_photo_links ppl ON ppl.person_id = p.id
+        GROUP BY p.id ORDER BY cnt DESC LIMIT 12
+    """).fetchall()
+    top_people = [{"id": r["id"], "name": r["name"] or "Без імені", "count": r["cnt"]} for r in top_people_rows]
+
+    place_rows = db.execute("""
+        SELECT city, country, COUNT(*) as cnt FROM photos
+        WHERE city IS NOT NULL AND city != '' AND city != 'Без локації'
+        GROUP BY city ORDER BY cnt DESC LIMIT 12
+    """).fetchall()
+    top_places = [{"city": r["city"], "country": r["country"] or "", "count": r["cnt"]} for r in place_rows]
+
+    top_tagged_rows = db.execute("""
+        SELECT p.id, p.name, COUNT(pt.tag_id) as cnt
+        FROM persons p JOIN person_tags pt ON pt.person_id = p.id
+        GROUP BY p.id ORDER BY cnt DESC LIMIT 12
+    """).fetchall()
+    top_tagged = [{"id": r["id"], "name": r["name"] or "Без імені", "count": r["cnt"]} for r in top_tagged_rows]
+
+    # Найстаріше і найновіше фото
+    minmax_row = db.execute("SELECT MIN(taken_at) as min_ts, MAX(taken_at) as max_ts FROM photos WHERE taken_at IS NOT NULL").fetchone()
+    oldest_date = None
+    newest_date = None
+    if minmax_row["min_ts"]:
+        oldest_date = datetime.datetime.fromtimestamp(minmax_row["min_ts"]).strftime("%d.%m.%Y")
+    if minmax_row["max_ts"]:
+        newest_date = datetime.datetime.fromtimestamp(minmax_row["max_ts"]).strftime("%d.%m.%Y")
+
+    # Активність по місяцях (агреговано по всіх роках) і днях тижня
+    month_rows = db.execute("""
+        SELECT CAST(strftime('%m', datetime(taken_at,'unixepoch')) AS INTEGER) as month, COUNT(*) as cnt
+        FROM photos WHERE taken_at IS NOT NULL GROUP BY month ORDER BY month
+    """).fetchall()
+    by_month = [{"month": r["month"], "count": r["cnt"]} for r in month_rows if r["month"]]
+
+    weekday_rows = db.execute("""
+        SELECT CAST(strftime('%w', datetime(taken_at,'unixepoch')) AS INTEGER) as dow, COUNT(*) as cnt
+        FROM photos WHERE taken_at IS NOT NULL GROUP BY dow ORDER BY dow
+    """).fetchall()
+    by_weekday = [{"dow": r["dow"], "count": r["cnt"]} for r in weekday_rows]
+
+    # Розмір на диску + камери - лениве кешування (по STATS_FILL_CAP фото за раз)
+    filled_now = _fill_missing_size_camera(db)
+    remaining_to_scan = db.execute("SELECT COUNT(*) FROM photos WHERE size IS NULL OR camera IS NULL").fetchone()[0]
+
+    size_row = db.execute("SELECT SUM(size) as total FROM photos WHERE size IS NOT NULL").fetchone()
+    total_size_bytes = size_row["total"] or 0
+
+    top_largest_rows = db.execute("""
+        SELECT id, path, size FROM photos WHERE size IS NOT NULL ORDER BY size DESC LIMIT 10
+    """).fetchall()
+    top_largest = [{"id": r["id"], "path": r["path"], "size": r["size"]} for r in top_largest_rows]
+
+    camera_rows = db.execute("""
+        SELECT camera, COUNT(*) as cnt FROM photos
+        WHERE camera IS NOT NULL AND camera != ''
+        GROUP BY camera ORDER BY cnt DESC LIMIT 10
+    """).fetchall()
+    top_cameras = [{"camera": r["camera"], "count": r["cnt"]} for r in camera_rows]
+
+    # Люди без тегів / без нотаток
+    untagged_total = db.execute("""
+        SELECT COUNT(*) FROM persons WHERE id NOT IN (SELECT DISTINCT person_id FROM person_tags)
+    """).fetchone()[0]
+    untagged_sample_rows = db.execute("""
+        SELECT id, name FROM persons WHERE id NOT IN (SELECT DISTINCT person_id FROM person_tags)
+        ORDER BY (SELECT COUNT(*) FROM faces WHERE person_id=persons.id) DESC LIMIT 10
+    """).fetchall()
+    untagged_sample = [{"id": r["id"], "name": r["name"] or "Без імені"} for r in untagged_sample_rows]
+
+    unnoted_total = db.execute("SELECT COUNT(*) FROM persons WHERE note IS NULL OR note=''").fetchone()[0]
+    unnoted_sample_rows = db.execute("""
+        SELECT id, name FROM persons WHERE note IS NULL OR note=''
+        ORDER BY (SELECT COUNT(*) FROM faces WHERE person_id=persons.id) DESC LIMIT 10
+    """).fetchall()
+    unnoted_sample = [{"id": r["id"], "name": r["name"] or "Без імені"} for r in unnoted_sample_rows]
+
+    # Прогрес індексації по роках - скільки фото в кожному році вже мають хоч одне розпізнане обличчя
+    progress_rows = db.execute("""
+        SELECT CAST(strftime('%Y', datetime(ph.taken_at,'unixepoch')) AS INTEGER) as year,
+               COUNT(DISTINCT ph.id) as total,
+               COUNT(DISTINCT CASE WHEN f.id IS NOT NULL THEN ph.id END) as with_faces
+        FROM photos ph LEFT JOIN faces f ON f.photo_id = ph.id
+        WHERE ph.taken_at IS NOT NULL
+        GROUP BY year ORDER BY year
+    """).fetchall()
+    indexing_progress = [
+        {"year": r["year"], "total": r["total"], "with_faces": r["with_faces"],
+         "pct": round(100 * r["with_faces"] / r["total"]) if r["total"] else 0}
+        for r in progress_rows if r["year"]
+    ]
+
+    return {
+        "photos_total": photos_total,
+        "faces_total": faces_total,
+        "persons_total": persons_total,
+        "by_year": by_year,
+        "top_people": top_people,
+        "top_places": top_places,
+        "top_tagged": top_tagged,
+        "oldest_date": oldest_date,
+        "newest_date": newest_date,
+        "by_month": by_month,
+        "by_weekday": by_weekday,
+        "total_size_bytes": total_size_bytes,
+        "top_largest": top_largest,
+        "top_cameras": top_cameras,
+        "untagged_total": untagged_total,
+        "untagged_sample": untagged_sample,
+        "unnoted_total": unnoted_total,
+        "unnoted_sample": unnoted_sample,
+        "indexing_progress": indexing_progress,
+        "size_scan_remaining": remaining_to_scan,
+    }
+
 @app.get("/api/status")
 def status():
     db = get_db()
@@ -460,7 +744,7 @@ async def toggle_folder(folder_id: int, data: dict):
 
 # Persons API
 @app.get("/api/persons")
-def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str = "count"):
+def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str = "count", tag_id: int = None):
     try:
         db = get_db()
         # Міграція на випадок якщо стовпці відсутні
@@ -473,27 +757,45 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
             db.commit()
         order_named = "LOWER(p.name) ASC" if sort == "name" else "photo_count DESC"
         search_pat = f"%{search.lower()}%" if search else None
+        tag_join = "JOIN person_tags pt ON pt.person_id = p.id AND pt.tag_id = ?" if tag_id else ""
+        # В межах конкретного тега обране/порядок — свої, окремі від глобального списку
+        fav_col = "pt.is_favorite" if tag_id else "p.is_favorite"
+        order_col = "pt.sort_order" if tag_id else "p.sort_order"
+        params = []
+        if tag_id:
+            params.append(tag_id)
+        where_clause = "WHERE LOWER(p.name) LIKE ?" if search_pat else ""
         if search_pat:
-            rows = db.execute(f"""
-                SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-                       (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
-                FROM persons p
-                WHERE LOWER(p.name) LIKE ?
-                ORDER BY p.is_favorite DESC, p.sort_order ASC,
-                         CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
-                         {order_named}
-                LIMIT ? OFFSET ?
-            """, (search_pat, limit, offset)).fetchall()
-        else:
-            rows = db.execute(f"""
-                SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-                       (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
-                FROM persons p
-                ORDER BY p.is_favorite DESC, p.sort_order ASC,
-                         CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
-                         {order_named}
-                LIMIT ? OFFSET ?
-            """, (limit, offset)).fetchall()
+            params.append(search_pat)
+        params.extend([limit, offset])
+        rows = db.execute(f"""
+            SELECT p.id, p.name, p.cover_face_id, {fav_col} as is_favorite, {order_col} as sort_order,
+                   (SELECT COUNT(DISTINCT photo_id) FROM person_photo_links WHERE person_id=p.id) as photo_count
+            FROM persons p
+            {tag_join}
+            {where_clause}
+            ORDER BY {fav_col} DESC, {order_col} ASC,
+                     CASE WHEN p.name IS NULL OR p.name='' THEN 1 ELSE 0 END ASC,
+                     {order_named}
+            LIMIT ? OFFSET ?
+        """, params).fetchall()
+
+        # Батч-запит тегів для всіх людей цієї сторінки одразу (без N+1)
+        person_ids = [r["id"] for r in rows]
+        tags_by_person = {}
+        if person_ids:
+            placeholders = ",".join("?" * len(person_ids))
+            tag_rows = db.execute(f"""
+                SELECT pt.person_id, t.id, t.name, t.color
+                FROM person_tags pt JOIN tags t ON t.id = pt.tag_id
+                WHERE pt.person_id IN ({placeholders})
+                ORDER BY t.name
+            """, person_ids).fetchall()
+            for tr in tag_rows:
+                tags_by_person.setdefault(tr["person_id"], []).append(
+                    {"id": tr["id"], "name": tr["name"], "color": tr["color"]}
+                )
+
         result = []
         for r in rows:
             cover_url = None
@@ -511,6 +813,7 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
                 "id": r["id"], "name": r["name"],
                 "photo_count": r["photo_count"], "cover_url": cover_url,
                 "is_favorite": bool(r["is_favorite"]), "sort_order": r["sort_order"],
+                "tags": tags_by_person.get(r["id"], []),
             })
         return result
     except Exception as e:
@@ -518,13 +821,97 @@ def list_persons(limit: int = 100, offset: int = 0, search: str = "", sort: str 
         return []
 
 @app.get("/api/persons/count")
-def persons_count(search: str = ""):
+def persons_count(search: str = "", tag_id: int = None):
     db = get_db()
+    tag_join = "JOIN person_tags pt ON pt.person_id = p.id AND pt.tag_id = ?" if tag_id else ""
+    params = []
+    if tag_id:
+        params.append(tag_id)
+    where_clause = "WHERE LOWER(p.name) LIKE ?" if search else ""
     if search:
-        row = db.execute("SELECT COUNT(*) FROM persons WHERE LOWER(name) LIKE ?", (f"%{search.lower()}%",)).fetchone()
-    else:
-        row = db.execute("SELECT COUNT(*) FROM persons").fetchone()
+        params.append(f"%{search.lower()}%")
+    row = db.execute(f"SELECT COUNT(*) FROM persons p {tag_join} {where_clause}", params).fetchone()
     return {"count": row[0]}
+
+# ---------------------------------------------------------------------------
+# Tags / groups
+# ---------------------------------------------------------------------------
+
+@app.get("/api/tags")
+def list_tags():
+    db = get_db()
+    rows = db.execute("""
+        SELECT t.id, t.name, t.color, COUNT(pt.person_id) as count
+        FROM tags t LEFT JOIN person_tags pt ON pt.tag_id = t.id
+        GROUP BY t.id
+        ORDER BY t.name
+    """).fetchall()
+    return [{"id": r["id"], "name": r["name"], "color": r["color"], "count": r["count"]} for r in rows]
+
+@app.post("/api/tags")
+async def create_tag(data: dict):
+    name = (data.get("name") or "").strip()
+    if not name:
+        return JSONResponse({"error": "Назва тега не може бути порожньою"}, status_code=400)
+    db = get_db()
+    existing = db.execute("SELECT id, name, color FROM tags WHERE name=?", (name,)).fetchone()
+    if existing:
+        return {"id": existing["id"], "name": existing["name"], "color": existing["color"], "existed": True}
+    count = db.execute("SELECT COUNT(*) FROM tags").fetchone()[0]
+    color = TAG_COLORS[count % len(TAG_COLORS)]
+    with db:
+        cur = db.execute("INSERT INTO tags (name, color) VALUES (?, ?)", (name, color))
+    return {"id": cur.lastrowid, "name": name, "color": color, "existed": False}
+
+@app.delete("/api/tags/{tag_id}")
+def delete_tag(tag_id: int):
+    db = get_db()
+    with db:
+        db.execute("DELETE FROM person_tags WHERE tag_id=?", (tag_id,))
+        db.execute("DELETE FROM tags WHERE id=?", (tag_id,))
+    return {"ok": True}
+
+@app.get("/api/persons/{person_id}/tags")
+def get_person_tags(person_id: int):
+    db = get_db()
+    rows = db.execute("""
+        SELECT t.id, t.name, t.color FROM person_tags pt
+        JOIN tags t ON t.id = pt.tag_id
+        WHERE pt.person_id=? ORDER BY t.name
+    """, (person_id,)).fetchall()
+    return [{"id": r["id"], "name": r["name"], "color": r["color"]} for r in rows]
+
+@app.post("/api/persons/{person_id}/tags")
+async def add_person_tag(person_id: int, data: dict):
+    """Призначає тег людині. Приймає {tag_id: N} для існуючого тега або {name: '...'} для нового/за назвою."""
+    db = get_db()
+    tag_id = data.get("tag_id")
+    if not tag_id and data.get("name"):
+        name = data["name"].strip()
+        if not name:
+            return JSONResponse({"error": "Назва тега не може бути порожньою"}, status_code=400)
+        existing = db.execute("SELECT id FROM tags WHERE name=?", (name,)).fetchone()
+        if existing:
+            tag_id = existing["id"]
+        else:
+            count = db.execute("SELECT COUNT(*) FROM tags").fetchone()[0]
+            color = TAG_COLORS[count % len(TAG_COLORS)]
+            with db:
+                cur = db.execute("INSERT INTO tags (name, color) VALUES (?, ?)", (name, color))
+            tag_id = cur.lastrowid
+    if not tag_id:
+        return JSONResponse({"error": "Потрібно вказати tag_id або name"}, status_code=400)
+    with db:
+        db.execute("INSERT OR IGNORE INTO person_tags (person_id, tag_id) VALUES (?, ?)", (person_id, tag_id))
+    tag = db.execute("SELECT id, name, color FROM tags WHERE id=?", (tag_id,)).fetchone()
+    return {"ok": True, "tag": {"id": tag["id"], "name": tag["name"], "color": tag["color"]}}
+
+@app.delete("/api/persons/{person_id}/tags/{tag_id}")
+def remove_person_tag(person_id: int, tag_id: int):
+    db = get_db()
+    with db:
+        db.execute("DELETE FROM person_tags WHERE person_id=? AND tag_id=?", (person_id, tag_id))
+    return {"ok": True}
 
 @app.post("/api/persons/reorder")
 async def reorder_favorites(data: dict):
@@ -541,7 +928,7 @@ def get_person(person_id: int):
     db = get_db()
     r = db.execute("""
         SELECT p.id, p.name, p.cover_face_id, p.is_favorite, p.sort_order,
-               (SELECT COUNT(DISTINCT photo_id) FROM faces WHERE person_id=p.id) as photo_count
+               (SELECT COUNT(DISTINCT photo_id) FROM person_photo_links WHERE person_id=p.id) as photo_count
         FROM persons p WHERE p.id=?
     """, (person_id,)).fetchone()
     if not r: return JSONResponse({"error": "not found"}, status_code=404)
@@ -556,6 +943,33 @@ def get_person(person_id: int):
 # ---------------------------------------------------------------------------
 # Places / GPS
 # ---------------------------------------------------------------------------
+
+def get_camera_from_exif(path: str):
+    """Зчитує модель камери з EXIF (Make + Model). Повертає рядок або None."""
+    try:
+        from PIL import Image
+        from PIL.ExifTags import TAGS
+        img = Image.open(path)
+        exif_data = img._getexif()
+        if not exif_data:
+            return None
+        make = None
+        model = None
+        for tag_id, value in exif_data.items():
+            tag = TAGS.get(tag_id, tag_id)
+            if tag == "Make":
+                make = str(value).strip().strip("\x00")
+            elif tag == "Model":
+                model = str(value).strip().strip("\x00")
+        if not make and not model:
+            return None
+        if make and model:
+            if model.lower().startswith(make.lower()):
+                return model
+            return f"{make} {model}"
+        return make or model
+    except Exception:
+        return None
 
 def get_gps_from_exif(path: str):
     """Зчитує GPS координати з EXIF фото. Повертає (lat, lon) або None."""
@@ -631,7 +1045,7 @@ def person_places(person_id: int):
     db = get_db()
     photos = db.execute("""
         SELECT ph.id, ph.path, ph.city, ph.country FROM photos ph
-        JOIN faces f ON f.photo_id = ph.id
+        JOIN person_photo_links f ON f.photo_id = ph.id
         WHERE f.person_id = ?
         GROUP BY ph.id
     """, (person_id,)).fetchall()
@@ -685,7 +1099,7 @@ def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int
     if city == "Без локації":
         rows = db.execute("""
             SELECT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ? AND (ph.city = '' OR ph.city IS NULL)
             GROUP BY ph.id
             ORDER BY ph.taken_at DESC
@@ -694,7 +1108,7 @@ def person_place_photos(person_id: int, city: str, limit: int = 200, offset: int
     else:
         rows = db.execute("""
             SELECT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ? AND ph.city = ?
             GROUP BY ph.id
             ORDER BY ph.taken_at DESC
@@ -726,22 +1140,78 @@ def person_years(person_id: int):
     rows = db.execute("""
         SELECT DISTINCT CAST(strftime('%Y', datetime(ph.taken_at, 'unixepoch')) AS INTEGER) as year
         FROM photos ph
-        JOIN faces f ON f.photo_id = ph.id
+        JOIN person_photo_links f ON f.photo_id = ph.id
         WHERE f.person_id = ? AND ph.taken_at IS NOT NULL
         ORDER BY year DESC
     """, (person_id,)).fetchall()
     return [r["year"] for r in rows if r["year"]]
 
+@app.get("/api/shared-photos")
+def shared_photos(person_ids: str, limit: int = 200, offset: int = 0):
+    """Повертає фото, на яких є ВСІ вказані люди одночасно. person_ids — список id через кому."""
+    import datetime
+    try:
+        ids = [int(x) for x in person_ids.split(",") if x.strip()]
+    except ValueError:
+        return JSONResponse({"error": "Некоректний список id"}, status_code=400)
+    ids = list(set(ids))
+    if len(ids) < 2:
+        return JSONResponse({"error": "Потрібно щонайменше 2 людини"}, status_code=400)
+    db = get_db()
+    placeholders = ",".join("?" * len(ids))
+    rows = db.execute(f"""
+        SELECT ph.id, ph.path, ph.taken_at FROM photos ph
+        JOIN (
+            SELECT photo_id FROM person_photo_links
+            WHERE person_id IN ({placeholders})
+            GROUP BY photo_id
+            HAVING COUNT(DISTINCT person_id) = ?
+        ) matched ON matched.photo_id = ph.id
+        ORDER BY ph.taken_at DESC NULLS LAST
+        LIMIT ? OFFSET ?
+    """, ids + [len(ids), limit, offset]).fetchall()
+    result = []
+    for r in rows:
+        yr = None
+        if r["taken_at"]:
+            try:
+                yr = datetime.datetime.fromtimestamp(r["taken_at"]).year
+            except Exception:
+                pass
+        result.append({
+            "id": r["id"], "path": r["path"],
+            "thumb": make_photo_thumb(r["path"], r["id"]),
+            "taken_at": r["taken_at"], "year": yr,
+        })
+    return result
+
 @app.get("/api/persons/{person_id}/photos")
-def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int = None):
+def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int = None,
+                   date_from: str = None, date_to: str = None):
     import datetime
     db = get_db()
-    if year:
+    if date_from or date_to:
+        try:
+            ts_from = datetime.datetime.strptime(date_from, "%Y-%m-%d").timestamp() if date_from else 0
+        except ValueError:
+            ts_from = 0
+        try:
+            ts_to = (datetime.datetime.strptime(date_to, "%Y-%m-%d") + datetime.timedelta(days=1)).timestamp() - 1 if date_to else time.time()
+        except ValueError:
+            ts_to = time.time()
+        rows = db.execute("""
+            SELECT DISTINCT ph.id, ph.path, ph.taken_at FROM photos ph
+            JOIN person_photo_links f ON f.photo_id = ph.id
+            WHERE f.person_id = ? AND ph.taken_at BETWEEN ? AND ?
+            ORDER BY ph.taken_at DESC
+            LIMIT ? OFFSET ?
+        """, (person_id, ts_from, ts_to, limit, offset)).fetchall()
+    elif year:
         year_start = datetime.datetime(year, 1, 1).timestamp()
         year_end = datetime.datetime(year, 12, 31, 23, 59, 59).timestamp()
         rows = db.execute("""
             SELECT DISTINCT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ? AND ph.taken_at BETWEEN ? AND ?
             ORDER BY ph.taken_at DESC
             LIMIT ? OFFSET ?
@@ -749,7 +1219,7 @@ def person_photos(person_id: int, limit: int = 200, offset: int = 0, year: int =
     else:
         rows = db.execute("""
             SELECT DISTINCT ph.id, ph.path, ph.taken_at FROM photos ph
-            JOIN faces f ON f.photo_id = ph.id
+            JOIN person_photo_links f ON f.photo_id = ph.id
             WHERE f.person_id = ?
             ORDER BY ph.taken_at DESC NULLS LAST
             LIMIT ? OFFSET ?
@@ -782,6 +1252,28 @@ def toggle_favorite(person_id: int):
         db.execute("UPDATE persons SET is_favorite=? WHERE id=?", (new_val, person_id))
     return {"ok": True, "is_favorite": bool(new_val)}
 
+@app.post("/api/persons/{person_id}/tags/{tag_id}/favorite")
+def toggle_tag_favorite(person_id: int, tag_id: int):
+    """Перемикає 'обране' в межах конкретного тега — окремо від глобального обраного."""
+    db = get_db()
+    row = db.execute("SELECT is_favorite FROM person_tags WHERE person_id=? AND tag_id=?", (person_id, tag_id)).fetchone()
+    if not row:
+        return JSONResponse({"ok": False, "error": "Тег не призначено цій людині"}, status_code=404)
+    new_val = 0 if row["is_favorite"] else 1
+    with db:
+        db.execute("UPDATE person_tags SET is_favorite=? WHERE person_id=? AND tag_id=?", (new_val, person_id, tag_id))
+    return {"ok": True, "is_favorite": bool(new_val)}
+
+@app.post("/api/tags/{tag_id}/reorder")
+async def reorder_tag_favorites(tag_id: int, data: dict):
+    """data: {ids: [id1, id2, ...]} — порядок обраних у межах цього тега"""
+    ids = data.get("ids", [])
+    db = get_db()
+    with db:
+        for i, pid in enumerate(ids):
+            db.execute("UPDATE person_tags SET sort_order=? WHERE person_id=? AND tag_id=?", (i, pid, tag_id))
+    return {"ok": True}
+
 @app.post("/api/persons/split")
 async def split_person(data: dict):
     """Переміщує вибрані фото (по photo_id) до іншої або нової людини."""
@@ -806,6 +1298,14 @@ async def split_person(data: dict):
     return {"ok": True, "target_person_id": target_person_id}
 
 
+@app.get("/api/persons/{person_id}/note")
+def get_person_note(person_id: int):
+    db = get_db()
+    r = db.execute("SELECT note FROM persons WHERE id=?", (person_id,)).fetchone()
+    if not r:
+        return JSONResponse({"error": "not found"}, status_code=404)
+    return {"note": r["note"] or ""}
+
 @app.patch("/api/persons/{person_id}")
 async def update_person(person_id: int, data: dict):
     db = get_db()
@@ -815,6 +1315,9 @@ async def update_person(person_id: int, data: dict):
     if "cover_face_id" in data:
         with db:
             db.execute("UPDATE persons SET cover_face_id=? WHERE id=?", (data["cover_face_id"], person_id))
+    if "note" in data:
+        with db:
+            db.execute("UPDATE persons SET note=? WHERE id=?", (data["note"], person_id))
     return {"ok": True}
 
 @app.delete("/api/persons/{person_id}")
@@ -822,7 +1325,29 @@ def delete_person(person_id: int):
     db = get_db()
     with db:
         db.execute("DELETE FROM faces WHERE person_id=?", (person_id,))
+        db.execute("DELETE FROM manual_photo_links WHERE person_id=?", (person_id,))
         db.execute("DELETE FROM persons WHERE id=?", (person_id,))
+    return {"ok": True}
+
+@app.post("/api/photos/{photo_id}/duplicate-to/{person_id}")
+def duplicate_photo_to_person(photo_id: int, person_id: int):
+    """Додає фото в галерею іншої людини без переміщення (без реального обличчя)."""
+    db = get_db()
+    with db:
+        db.execute(
+            "INSERT OR IGNORE INTO manual_photo_links (photo_id, person_id) VALUES (?, ?)",
+            (photo_id, person_id)
+        )
+    return {"ok": True}
+
+@app.delete("/api/photos/{photo_id}/duplicate-to/{person_id}")
+def remove_duplicate_link(photo_id: int, person_id: int):
+    db = get_db()
+    with db:
+        db.execute(
+            "DELETE FROM manual_photo_links WHERE photo_id=? AND person_id=?",
+            (photo_id, person_id)
+        )
     return {"ok": True}
 
 @app.post("/api/photos/{photo_id}/unlink")
@@ -831,6 +1356,7 @@ def unlink_photo(photo_id: int):
     db = get_db()
     with db:
         db.execute("UPDATE faces SET person_id=NULL WHERE photo_id=?", (photo_id,))
+        db.execute("DELETE FROM manual_photo_links WHERE photo_id=?", (photo_id,))
     return {"ok": True}
 
 @app.get("/api/photos/{photo_id}/face-for-person/{person_id}")
@@ -913,6 +1439,43 @@ async def search_by_face(file: UploadFile = File(...)):
             p["similarity"] = round(sim * 100, 1)
             result.append(p)
     return {"persons": result}
+
+@app.get("/api/photo/info")
+def photo_info(path: str):
+    """Повертає розмір файлу, GPS і місто (кешоване або пораховане на льоту) для однієї фотографії."""
+    try:
+        size = os.path.getsize(path)
+    except OSError:
+        size = None
+
+    db = get_db()
+    row = db.execute("SELECT id, city, country, taken_at FROM photos WHERE path=?", (path,)).fetchone()
+
+    city = row["city"] if row else None
+    country = row["country"] if row else None
+    gps = get_gps_from_exif(path)
+
+    if row and city is None:
+        # Ще не кешовано (як і в /places) — рахуємо і зберігаємо
+        if gps:
+            geo = reverse_geocode(gps[0], gps[1], db)
+            city = geo["city"]
+            country = geo["country"]
+        else:
+            city = ""
+            country = ""
+        db.execute("UPDATE photos SET city=?, country=? WHERE id=?", (city, country, row["id"]))
+        db.commit()
+
+    return {
+        "name": os.path.basename(path),
+        "path": path,
+        "size": size,
+        "taken_at": row["taken_at"] if row else None,
+        "gps": {"lat": gps[0], "lon": gps[1]} if gps else None,
+        "city": city if city not in (None, "", "Без локації") else None,
+        "country": country or None,
+    }
 
 @app.get("/api/photo/image")
 def photo_image(path: str):
@@ -997,6 +1560,37 @@ def browse_folder():
 def get_version():
     return {"version": VERSION}
 
+def get_local_ip():
+    """Визначає IP-адресу цього комп'ютера в локальній мережі (без реального надсилання пакетів)."""
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+@app.get("/api/lan-url")
+def lan_url(request: Request):
+    ip = get_local_ip()
+    host_header = request.headers.get("host", "")
+    port = host_header.split(":")[-1] if ":" in host_header else "80"
+    pin = get_setting("access_pin", "1234")
+    return {"url": f"http://{ip}:{port}", "ip": ip, "port": port, "pin": pin}
+
+@app.get("/api/settings/pin")
+def get_pin():
+    return {"pin": get_setting("access_pin", "1234")}
+
+@app.post("/api/settings/pin")
+async def update_pin(data: dict):
+    pin = (data.get("pin") or "").strip()
+    if not pin:
+        return JSONResponse({"error": "PIN не може бути порожнім"}, status_code=400)
+    set_setting("access_pin", pin)
+    return {"ok": True, "pin": pin}
+
 @app.get("/api/check-update")
 async def check_update():
     import urllib.request
@@ -1068,4 +1662,4 @@ def root():
     return FileResponse("index.html")
 
 if __name__ == "__main__":
-    uvicorn.run("app:app", host="127.0.0.1", port=7788, reload=False)
+    uvicorn.run("app:app", host="0.0.0.0", port=7788, reload=False)

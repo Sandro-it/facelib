@@ -71,6 +71,10 @@
   .person-list::-webkit-scrollbar{width:4px}
   .person-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
   .person-card{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:var(--radius);cursor:pointer;transition:background .15s;position:relative;overflow:hidden}
+  .tag-dots{position:absolute;bottom:-2px;left:50%;transform:translateX(-50%);display:flex;gap:2px;background:rgba(0,0,0,.4);border-radius:6px;padding:1.5px 3px}
+  .tag-filter-chip{font-size:11px;padding:3px 10px;border-radius:12px;cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text)}
+  .tag-filter-chip.active{background:var(--accent-dim);border-color:var(--accent)}
+  .tag-filter-add{border-style:dashed;color:var(--text-dim)}
   .person-card:hover{background:var(--surface2)}
   .person-card.active{background:var(--accent-dim)}
   .person-avatar{width:42px;height:42px;border-radius:50%;object-fit:cover;background:var(--surface2);flex-shrink:0;border:2px solid var(--border)}
@@ -134,6 +138,13 @@
   .gallery-toolbar-btn{height:28px;padding:0 10px;border-radius:6px;border:1px solid var(--border);background:transparent;cursor:pointer;font-size:12px;color:var(--text-dim);display:flex;align-items:center;gap:4px;transition:all .15s;white-space:nowrap}
   .gallery-toolbar-btn:hover{background:var(--surface2);color:var(--text)}
   .gallery-toolbar-btn.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent)}
+  .date-filter-wrap{position:relative;display:inline-flex}
+  .date-filter-popover{display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:20;flex-direction:column;gap:8px;min-width:210px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+  .date-filter-popover.open{display:flex}
+  .date-filter-popover label{font-size:11px;color:var(--text-dim)}
+  .date-filter-popover input[type=date]{height:28px;width:100%;padding:0 6px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;color-scheme:dark}
+  .date-filter-popover .df-actions{display:flex;gap:6px;margin-top:2px}
+  .date-filter-popover .df-actions .btn{height:28px;padding:0 10px;font-size:12px;flex:1}
   .gallery-wrap{flex:1;display:flex;overflow:hidden}
   .places-panel{width:0;flex-shrink:0;background:var(--surface);border-left:1px solid var(--border);overflow:hidden;transition:width .2s ease;display:flex;flex-direction:column}
   .places-panel.open{width:148px}
@@ -161,6 +172,12 @@
 
   /* Lightbox / Slider */
   .lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.95);z-index:100;flex-direction:column}
+  .lb-info-panel{display:none;position:absolute;top:56px;right:16px;z-index:110;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:14px 16px;min-width:260px;max-width:340px;box-shadow:0 8px 24px rgba(0,0,0,.5);font-size:13px;color:var(--text)}
+  .lb-info-panel.open{display:block}
+  .lb-info-panel .info-row{display:flex;gap:10px;margin-bottom:8px}
+  .lb-info-panel .info-row:last-child{margin-bottom:0}
+  .lb-info-panel .info-label{color:var(--text-dim);min-width:64px;flex-shrink:0}
+  .lb-info-panel .info-value{word-break:break-all}
   .lightbox.open{display:flex}
   .lb-top{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;flex-shrink:0}
   .lb-counter{font-size:13px;color:var(--text-dim)}
@@ -187,6 +204,7 @@
   .modal-list::-webkit-scrollbar{width:4px}
   .modal-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
   .modal-item{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer;transition:background .15s}
+  .modal-item.selected{background:var(--accent-dim)}
   .modal-item:hover{background:var(--surface2)}
   .modal-item img,.modal-item-ph{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid var(--border);flex-shrink:0}
   .modal-item-ph{background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--text-dim)}
@@ -220,6 +238,7 @@
       <span class="dot" id="statusDot"></span><span id="statusText">Завантаження...</span>
     </div>
     <div style="display:flex;align-items:center;gap:8px">
+      <button id="qrBtn" class="btn btn-secondary" style="font-size:11px;padding:3px 10px" onclick="openQrModal()" title="Відкрити на телефоні через локальну мережу">📱 QR</button>
       <span id="versionBadge" style="font-size:11px;color:var(--text-dim)"></span>
       <button id="updateBtn" class="btn btn-secondary" style="display:none;font-size:11px;padding:3px 10px" onclick="checkAndUpdate()">🔄 Оновити</button>
     </div>
@@ -232,6 +251,7 @@
           <button class="btn btn-secondary" id="btnStop" style="display:none" onclick="stopIndexer()">⏹ Стоп</button>
         </div>
         <button class="btn btn-secondary" onclick="doCluster()">🔗 Групувати обличчя</button>
+        <button class="btn btn-secondary" onclick="openArchiveStats()">📊 Статистика архіву</button>
       </div>
       <div class="progress-wrap" id="progressWrap">
         <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill" style="width:0%"></div></div>
@@ -253,6 +273,7 @@
           <span id="searchDropResult" style="display:none;font-size:12px"></span>
           <input type="file" id="searchInput" accept="image/*" onchange="searchByFile(this.files[0])">
         </div>
+        <button class="btn btn-secondary" style="width:100%;margin-top:8px;font-size:12px;padding:6px" onclick="openSharedPhotosModal()">🖇️ Спільні фото кількох людей</button>
       </div>
       <div class="persons-section">
         <div class="persons-header">
@@ -266,6 +287,7 @@
           <input class="folder-input" id="personSearch" placeholder="🔍 Пошук за ім'ям..." style="width:100%;font-size:12px;padding-right:26px" oninput="onPersonSearch(this.value)">
           <button onclick="clearPersonSearch()" id="personSearchClear" style="display:none;position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text-dim);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px" title="Очистити">✕</button>
         </div>
+        <div id="tagFilterRow" style="padding:0 8px 6px;display:flex;flex-wrap:wrap;gap:5px"></div>
         <div class="person-list" id="personList" onscroll="onPersonListScroll(this)"></div>
       </div>
     </aside>
@@ -285,9 +307,13 @@
     <div class="lb-counter" id="lbCounter"></div>
     <div style="display:flex;gap:8px">
       <button class="btn btn-secondary" style="font-size:12px;padding:5px 12px" onclick="lbOpenFolder()">📂 Відкрити в папці</button>
+      <button class="btn btn-secondary" id="lbInfoBtn" style="font-size:12px;padding:5px 12px" onclick="lbToggleInfo()">ℹ️ Інфо</button>
       <button class="btn btn-secondary" id="lbPlayBtn" style="font-size:12px;padding:5px 14px" onclick="lbTogglePlay()">▶</button>
       <button class="lb-close" onclick="closeLightbox()">✕</button>
     </div>
+  </div>
+  <div class="lb-info-panel" id="lbInfoPanel">
+    <div id="lbInfoContent"></div>
   </div>
   <div class="lb-main" onclick="if(event.target===this)closeLightbox()">
     <div class="lb-arrow left" onclick="event.stopPropagation();lbPrev()">‹</div>
@@ -303,7 +329,31 @@
     <input class="modal-search" id="mergeSearch" placeholder="Пошук за ім'ям..." oninput="filterMergeList(this.value)">
     <div class="modal-list" id="mergeList"></div>
     <div class="modal-footer">
+      <span id="sharedCount" style="display:none;font-size:12px;color:var(--text-dim);margin-right:auto"></span>
+      <button class="btn btn-primary" id="sharedFindBtn" style="display:none" onclick="submitSharedSearch()">🖇️ Знайти спільні фото</button>
       <button class="btn btn-secondary" onclick="closeMergeModal()">Скасувати</button>
+    </div>
+  </div>
+</div>
+
+<!-- QR / локальна мережа -->
+<div class="modal-bg" id="qrModal" onclick="if(event.target===this)closeQrModal()">
+  <div class="modal" style="text-align:center;max-width:320px">
+    <h3>📱 Відкрити на телефоні</h3>
+    <p style="font-size:12px;color:var(--text-dim);margin:4px 0 14px">Телефон має бути в тій самій Wi-Fi мережі, що й цей комп'ютер</p>
+    <div id="qrContent" style="display:flex;flex-direction:column;align-items:center;gap:12px">
+      <div class="spinner"></div>
+    </div>
+    <div style="border-top:1px solid var(--border);margin-top:6px;padding-top:12px;text-align:left">
+      <div style="font-size:11px;color:var(--text-dim);margin-bottom:6px">PIN для доступу ззовні (телефон покаже сторінку входу і попросить його)</div>
+      <div style="display:flex;gap:6px">
+        <input id="pinInput" placeholder="PIN" style="flex:1;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:13px;text-align:center">
+        <button class="btn btn-secondary" style="font-size:12px;padding:5px 10px" onclick="savePin()">Змінити</button>
+      </div>
+    </div>
+    <p style="font-size:11px;color:var(--text-dim);margin-top:10px">⚠️ Без PIN ніхто в мережі не потрапить у застосунок — на самому комп'ютері PIN не питається</p>
+    <div class="modal-footer" style="justify-content:center">
+      <button class="btn btn-secondary" onclick="closeQrModal()">Закрити</button>
     </div>
   </div>
 </div>
@@ -330,12 +380,16 @@ var currentPhotos = [];
 var lbIndex = 0;
 var allPersonsCache = {}; // id -> person
 var mergeSourceId = null;
+var selectedSharedIds = new Set();
 var confirmCallback = null;
 var currentAbort = null;
 var loadYear = null;
 var loadYearTop = null;
 var selectedPhotoIds = new Set();
 var lastSelectedIdx = -1;
+var dateFilterActive = false;
+var currentDateFrom = null;
+var currentDateTo = null;
 
 function togglePhotoSelect(photoId, card) {
   if (selectedPhotoIds.has(photoId)) {
@@ -423,6 +477,33 @@ async function shareSelectedPhotos() {
   }
 }
 
+async function saveSelectedToFolder() {
+  if (!selectedPhotoIds.size) return;
+  if (!(window.pywebview && window.pywebview.api && window.pywebview.api.choose_folder && window.pywebview.api.copy_files_to_folder)) {
+    toastHeader('Функція доступна тільки в десктопній версії', 'error');
+    return;
+  }
+  var folderRes = await window.pywebview.api.choose_folder();
+  if (!folderRes || !folderRes.ok) {
+    if (!folderRes || !folderRes.cancelled) {
+      toastHeader('Помилка вибору папки' + (folderRes && folderRes.error ? ': ' + folderRes.error : ''), 'error');
+    }
+    return;
+  }
+  var paths = Array.from(selectedPhotoIds).map(function(id) {
+    var ph = currentPhotos.find(function(p){ return p.id === id; });
+    return ph ? ph.path : null;
+  }).filter(Boolean);
+  if (!paths.length) return;
+  toastHeader('Копіювання...', 'info');
+  var res = await window.pywebview.api.copy_files_to_folder(paths, folderRes.folder);
+  if (res && res.ok) {
+    toastHeader('💾 Скопійовано ' + res.copied + ' з ' + res.total + ' фото', 'success');
+  } else {
+    toastHeader('Помилка: ' + (res ? res.error : 'невідома'), 'error');
+  }
+}
+
 async function removeSelectedPhotos() {
   if (!selectedPhotoIds.size) return;
   var ids = Array.from(selectedPhotoIds);
@@ -474,6 +555,21 @@ function openMoveToExistingModal() {
   var title = modal.querySelector('h3');
   if (title) title.textContent = 'Перемістити фото до...';
   var r2 = fetch('/api/persons').then(function(r){ return r.json(); }).then(function(persons){
+    allPersonsCache = {};
+    persons.forEach(function(p){ allPersonsCache[p.id] = p; });
+    renderMergeList(persons.filter(function(p){ return p.id !== currentPersonId; }));
+  });
+}
+
+function openDuplicateModal() {
+  if (!selectedPhotoIds.size) return;
+  document.getElementById('mergeSearch').value = '';
+  var modal = document.getElementById('mergeModal');
+  modal.classList.add('open');
+  modal.dataset.mode = 'duplicate';
+  var title = modal.querySelector('h3');
+  if (title) title.textContent = '🔗 Дублювати фото до...';
+  fetch('/api/persons').then(function(r){ return r.json(); }).then(function(persons){
     allPersonsCache = {};
     persons.forEach(function(p){ allPersonsCache[p.id] = p; });
     renderMergeList(persons.filter(function(p){ return p.id !== currentPersonId; }));
@@ -639,6 +735,48 @@ var personsBatchSize = 80;
 var personsAllLoaded = false;
 var personsSearchQuery = '';
 var personsLoading = false;
+var currentTagFilter = null;
+
+async function renderTagFilterRow() {
+  var row = document.getElementById('tagFilterRow');
+  if (!row) return;
+  var r = await fetch('/api/tags');
+  var tags = await r.json();
+  window._allTags = tags; // кеш для попапу тегів людини
+
+  var allChip = document.createElement('span');
+  allChip.className = 'tag-filter-chip' + (!currentTagFilter ? ' active' : '');
+  allChip.textContent = 'Усі';
+  allChip.onclick = function() { currentTagFilter = null; renderTagFilterRow(); loadPersons(null); };
+
+  var chips = [allChip];
+  tags.forEach(function(t) {
+    var chip = document.createElement('span');
+    chip.className = 'tag-filter-chip' + (currentTagFilter === t.id ? ' active' : '');
+    chip.textContent = t.name;
+    if (currentTagFilter === t.id) { chip.style.background = t.color; chip.style.borderColor = t.color; }
+    chip.onclick = function() {
+      currentTagFilter = (currentTagFilter === t.id ? null : t.id);
+      renderTagFilterRow(); loadPersons(null);
+    };
+    chips.push(chip);
+  });
+
+  var addChip = document.createElement('span');
+  addChip.className = 'tag-filter-chip tag-filter-add';
+  addChip.textContent = '+';
+  addChip.title = 'Створити новий тег';
+  addChip.onclick = async function() {
+    var name = window.prompt('Назва нового тега:');
+    if (!name || !name.trim()) return;
+    await fetch('/api/tags', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: name.trim()})});
+    renderTagFilterRow();
+  };
+  chips.push(addChip);
+
+  row.innerHTML = '';
+  chips.forEach(function(c) { row.appendChild(c); });
+}
 
 async function loadPersons(highlightIds) {
   if (highlightIds === null && currentHighlightIds) {
@@ -650,7 +788,9 @@ async function loadPersons(highlightIds) {
   var list = document.getElementById('personList');
   list.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-dim)"><div class="spinner" style="margin:0 auto"></div></div>';
   // Get count
-  var countR = await fetch('/api/persons/count?search=' + encodeURIComponent(personsSearchQuery));
+  var countUrl = '/api/persons/count?search=' + encodeURIComponent(personsSearchQuery);
+  if (currentTagFilter) countUrl += '&tag_id=' + currentTagFilter;
+  var countR = await fetch(countUrl);
   var countD = await countR.json();
   document.getElementById('personCount').textContent = countD.count.toLocaleString();
   list.innerHTML = '';
@@ -670,6 +810,7 @@ async function loadMorePersons(highlightIds) {
   personsLoading = true;
   var url = '/api/persons?limit=' + personsBatchSize + '&offset=' + personsOffset + '&sort=' + personsSort;
   if (personsSearchQuery) url += '&search=' + encodeURIComponent(personsSearchQuery);
+  if (currentTagFilter) url += '&tag_id=' + currentTagFilter;
   var r = await fetch(url);
   var persons = await r.json();
   if (persons.length < personsBatchSize) personsAllLoaded = true;
@@ -738,6 +879,19 @@ async function loadMorePersons(highlightIds) {
     if (p.cover_url) { avatar = document.createElement('img'); avatar.className = 'person-avatar'; avatar.src = p.cover_url; }
     else { avatar = document.createElement('div'); avatar.className = 'person-avatar-ph'; avatar.textContent = '👤'; }
 
+    var avatarWrap = document.createElement('div'); avatarWrap.style.cssText = 'position:relative;flex-shrink:0';
+    avatarWrap.appendChild(avatar);
+    if (p.tags && p.tags.length) {
+      var dotsWrap = document.createElement('div'); dotsWrap.className = 'tag-dots';
+      dotsWrap.title = p.tags.map(function(t){ return t.name; }).join(', ');
+      p.tags.forEach(function(t) {
+        var dot = document.createElement('span');
+        dot.style.cssText = 'width:6px;height:6px;border-radius:50%;background:' + t.color + ';display:block';
+        dotsWrap.appendChild(dot);
+      });
+      avatarWrap.appendChild(dotsWrap);
+    }
+
     var info = document.createElement('div'); info.className = 'person-info';
     var nameEl = document.createElement('div');
     nameEl.className = 'person-name' + (!p.name ? ' unnamed' : '');
@@ -748,7 +902,7 @@ async function loadMorePersons(highlightIds) {
     else { subEl.className = 'person-sub'; subEl.textContent = p.photo_count + ' фото'; }
     info.appendChild(nameEl); info.appendChild(subEl);
 
-    card.appendChild(avatar); card.appendChild(info);
+    card.appendChild(avatarWrap); card.appendChild(info);
 
     // Action buttons (з'являються при hover) + зірочка
     var actions = document.createElement('div');
@@ -780,7 +934,10 @@ async function loadMorePersons(highlightIds) {
 }
 
 async function toggleFavorite(pid) {
-  var r = await fetch('/api/persons/' + pid + '/favorite', {method:'POST'});
+  var url = currentTagFilter
+    ? '/api/persons/' + pid + '/tags/' + currentTagFilter + '/favorite'
+    : '/api/persons/' + pid + '/favorite';
+  var r = await fetch(url, {method:'POST'});
   var d = await r.json();
   if (!d.ok) return;
   var list = document.getElementById('personList');
@@ -827,7 +984,8 @@ function saveFavoritesOrder() {
   var list = document.getElementById('personList');
   var ids = [];
   list.querySelectorAll('.person-card[data-fav="1"]').forEach(function(c){ ids.push(parseInt(c.dataset.id)); });
-  fetch('/api/persons/reorder', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})});
+  var url = currentTagFilter ? '/api/tags/' + currentTagFilter + '/reorder' : '/api/persons/reorder';
+  fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ids:ids})});
 }
 
 var personsSort = 'count'; // 'count' | 'name'
@@ -871,6 +1029,9 @@ function onPersonListScroll(el) {
 async function openPerson(p) {
   currentPersonId = p.id;
   placesActive = false;
+  dateFilterActive = false;
+  currentDateFrom = null;
+  currentDateTo = null;
   document.querySelectorAll('.person-card').forEach(function(c){ c.classList.toggle('active', +c.dataset.id === p.id); });
   var content = document.getElementById('contentArea');
   content.innerHTML = '';
@@ -885,6 +1046,45 @@ async function openPerson(p) {
   var badge = document.createElement('span'); badge.className = 'save-badge'; badge.textContent = '✓ Збережено';
   nameWrap.appendChild(inp); nameWrap.appendChild(badge);
   inp.addEventListener('change', function() { renamePerson(p.id, inp.value, h2, badge, inp); });
+
+  var noteWrap = document.createElement('div'); noteWrap.className = 'date-filter-wrap';
+  var noteBtn = document.createElement('button');
+  noteBtn.className = 'gallery-toolbar-btn'; noteBtn.id = 'noteBtn';
+  noteBtn.innerHTML = '📝'; noteBtn.title = 'Нотатка про людину';
+  noteBtn.style.cssText = 'font-size:12px;padding:5px 10px';
+  noteBtn.onclick = function() { toggleNotePopover(p.id); };
+  var notePopover = document.createElement('div');
+  notePopover.className = 'date-filter-popover'; notePopover.id = 'notePopover';
+  notePopover.innerHTML =
+    '<label>Нотатка</label>' +
+    '<textarea id="noteTextarea" rows="4" style="width:100%;resize:vertical;padding:6px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:12px;font-family:inherit"></textarea>' +
+    '<div class="df-actions">' +
+      '<button class="btn btn-primary" id="noteSaveBtn">Зберегти</button>' +
+      '<button class="btn btn-secondary" id="noteCloseBtn">Закрити</button>' +
+    '</div>';
+  noteWrap.appendChild(noteBtn); noteWrap.appendChild(notePopover);
+  notePopover.querySelector('#noteSaveBtn').onclick = function() { saveNote(p.id); };
+  notePopover.querySelector('#noteCloseBtn').onclick = function() { closeNotePopover(); };
+
+  var tagWrap = document.createElement('div'); tagWrap.className = 'date-filter-wrap';
+  var tagBtn = document.createElement('button');
+  tagBtn.className = 'gallery-toolbar-btn'; tagBtn.id = 'tagBtn';
+  tagBtn.innerHTML = '🏷️'; tagBtn.title = 'Теги людини';
+  tagBtn.style.cssText = 'font-size:12px;padding:5px 10px';
+  tagBtn.onclick = function() { toggleTagPopover(p.id); };
+  var tagPopover = document.createElement('div');
+  tagPopover.className = 'date-filter-popover'; tagPopover.id = 'tagPopover';
+  tagPopover.style.minWidth = '230px';
+  tagPopover.innerHTML =
+    '<label>Теги цієї людини</label>' +
+    '<div id="personTagsChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>' +
+    '<label>Додати наявний</label>' +
+    '<div id="availableTagsChips" style="display:flex;flex-wrap:wrap;gap:6px"></div>' +
+    '<input type="text" id="newTagInput" placeholder="Або створити новий..." style="width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--surface2);color:var(--text);font-size:11px;box-sizing:border-box">';
+  tagWrap.appendChild(tagBtn); tagWrap.appendChild(tagPopover);
+  tagPopover.querySelector('#newTagInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); createAndAssignTag(p.id, this.value); this.value = ''; }
+  });
 
   var actions = document.createElement('div'); actions.className = 'header-actions';
   var mergeBtn = document.createElement('button'); mergeBtn.className = 'btn btn-secondary';
@@ -903,8 +1103,10 @@ async function openPerson(p) {
   var hdrMsg = document.createElement('span'); hdrMsg.id = 'hdrMsg';
   hdrMsg.style.cssText = 'font-size:12px;font-weight:600;opacity:0;transition:opacity .25s;white-space:nowrap';
 
-  hdr.appendChild(h2); hdr.appendChild(nameWrap); hdr.appendChild(cnt); hdr.appendChild(hdrMsg); hdr.appendChild(actions);
+  hdr.appendChild(h2); hdr.appendChild(nameWrap); hdr.appendChild(noteWrap); hdr.appendChild(tagWrap); hdr.appendChild(cnt); hdr.appendChild(hdrMsg); hdr.appendChild(actions);
   content.appendChild(hdr);
+  loadNoteIndicator(p.id);
+  loadTagIndicator(p.id);
 
   // Toolbar під хедером
   var toolbar = document.createElement('div'); toolbar.className = 'gallery-toolbar'; toolbar.id = 'galleryToolbar';
@@ -913,7 +1115,34 @@ async function openPerson(p) {
   placesBtn.innerHTML = '📍 Де знято';
   placesBtn.onclick = function() { togglePlaces(p.id); };
   toolbar.appendChild(placesBtn);
+
+  var slideshowBtn = document.createElement('button');
+  slideshowBtn.className = 'gallery-toolbar-btn'; slideshowBtn.id = 'slideshowBtn';
+  slideshowBtn.innerHTML = '🎬 Слайдшоу';
+  slideshowBtn.onclick = function() { startGallerySlideshow(); };
+  toolbar.appendChild(slideshowBtn);
+
+  var dateWrap = document.createElement('div'); dateWrap.className = 'date-filter-wrap';
+  var dateBtn = document.createElement('button');
+  dateBtn.className = 'gallery-toolbar-btn'; dateBtn.id = 'dateFilterBtn';
+  dateBtn.innerHTML = '📅 Дата';
+  dateBtn.onclick = function() { toggleDateFilter(p.id); };
+  dateWrap.appendChild(dateBtn);
+
+  var datePopover = document.createElement('div');
+  datePopover.className = 'date-filter-popover'; datePopover.id = 'dateFilterPopover';
+  datePopover.innerHTML =
+    '<label>Від</label><input type="date" id="dateFromInput">' +
+    '<label>До</label><input type="date" id="dateToInput">' +
+    '<div class="df-actions">' +
+      '<button class="btn btn-primary" id="dateApplyBtn">Застосувати</button>' +
+      '<button class="btn btn-secondary" id="dateResetBtn">Скинути</button>' +
+    '</div>';
+  dateWrap.appendChild(datePopover);
+  toolbar.appendChild(dateWrap);
   content.appendChild(toolbar);
+  datePopover.querySelector('#dateApplyBtn').onclick = function() { applyDateFilter(p.id); };
+  datePopover.querySelector('#dateResetBtn').onclick = function() { resetDateFilter(); };
 
   // Повідомлення в хедері (біля кнопок злити/видалити)
   var _hdrMsgTimer = null;
@@ -960,9 +1189,13 @@ async function openPerson(p) {
   removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
   var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
+  var duplicateBtn = document.createElement('button'); duplicateBtn.className = 'btn btn-secondary'; duplicateBtn.textContent = '🔗 Дублювати в іншу людину';
+  duplicateBtn.onclick = function(){ openDuplicateModal(); };
+  var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
+  saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
   var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
   cancelSelBtn.onclick = function(){ clearSelection(); };
-  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(cancelSelBtn);
+  selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(duplicateBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
 
   galleryWrap.appendChild(grid);
   galleryWrap.appendChild(selBar);
@@ -1139,6 +1372,280 @@ async function openPerson(p) {
   setTimeout(updateTimelineIndicator, 100);
 }
 
+async function openArchiveStats() {
+  currentPersonId = null;
+  currentPhotos = [];
+  document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
+  var content = document.getElementById('contentArea');
+  content.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Рахую статистику...</p></div>';
+
+  var d;
+  try {
+    var r = await fetch('/api/stats');
+    d = await r.json();
+  } catch (e) {
+    content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Не вдалося завантажити статистику</p></div>';
+    return;
+  }
+
+  var hdr = document.createElement('div'); hdr.className = 'content-header';
+  var h2 = document.createElement('h2'); h2.textContent = '📊 Статистика архіву';
+  var closeBtn = document.createElement('button'); closeBtn.className = 'close-gallery-btn';
+  closeBtn.textContent = '✕ Закрити'; closeBtn.onclick = function(){ closeGallery(); };
+  hdr.appendChild(h2); hdr.appendChild(closeBtn);
+
+  var body = document.createElement('div');
+  body.style.cssText = 'padding:20px;overflow-y:auto;flex:1;box-sizing:border-box';
+
+  // Підсумкові картки
+  var cards = document.createElement('div');
+  cards.style.cssText = 'display:flex;gap:14px;margin-bottom:28px;flex-wrap:wrap';
+  var cardDefs = [
+    ['📷', d.photos_total, 'фото'],
+    ['🙂', d.faces_total, 'облич'],
+    ['👤', d.persons_total, 'людей']
+  ];
+  cardDefs.forEach(function(cd) {
+    var card = document.createElement('div');
+    card.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 22px;min-width:140px';
+    card.innerHTML = '<div style="font-size:22px">' + cd[0] + '</div>' +
+      '<div style="font-size:22px;font-weight:700;margin-top:4px">' + cd[1].toLocaleString() + '</div>' +
+      '<div style="font-size:12px;color:var(--text-dim)">' + cd[2] + '</div>';
+    cards.appendChild(card);
+  });
+  if (d.total_size_bytes) {
+    var sizeGb = (d.total_size_bytes / 1024 / 1024 / 1024).toFixed(1);
+    var sizeCard = document.createElement('div');
+    sizeCard.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 22px;min-width:140px';
+    sizeCard.innerHTML = '<div style="font-size:22px">💾</div>' +
+      '<div style="font-size:22px;font-weight:700;margin-top:4px">' + sizeGb + ' ГБ</div>' +
+      '<div style="font-size:12px;color:var(--text-dim)">на диску</div>';
+    cards.appendChild(sizeCard);
+  }
+  if (d.oldest_date && d.newest_date) {
+    var rangeCard = document.createElement('div');
+    rangeCard.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 22px;min-width:180px';
+    rangeCard.innerHTML = '<div style="font-size:22px">🗓️</div>' +
+      '<div style="font-size:15px;font-weight:700;margin-top:4px">' + d.oldest_date + ' — ' + d.newest_date + '</div>' +
+      '<div style="font-size:12px;color:var(--text-dim)">діапазон дат</div>';
+    cards.appendChild(rangeCard);
+  }
+  body.appendChild(cards);
+  if (d.size_scan_remaining > 0) {
+    var scanNote = document.createElement('div');
+    scanNote.style.cssText = 'font-size:11px;color:var(--text-dim);margin:-18px 0 20px';
+    scanNote.textContent = '⏳ Розмір і камери ще розраховуються (' + d.size_scan_remaining.toLocaleString() + ' фото лишилось) — відкрий статистику ще раз пізніше для повних даних';
+    body.appendChild(scanNote);
+  }
+
+  // Фото по роках (вертикальні стовпчики)
+  if (d.by_year && d.by_year.length) {
+    var yearSection = document.createElement('div');
+    yearSection.style.cssText = 'margin-bottom:28px';
+    yearSection.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Фото по роках</div>';
+    var maxYearCount = Math.max.apply(null, d.by_year.map(function(y){ return y.count; }));
+    var chart = document.createElement('div');
+    chart.style.cssText = 'display:flex;align-items:flex-end;gap:6px;height:160px;padding:0 4px';
+    d.by_year.forEach(function(y) {
+      var barWrap = document.createElement('div');
+      barWrap.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:24px';
+      var barLabel = document.createElement('div');
+      barLabel.style.cssText = 'font-size:10px;color:var(--text-dim);margin-bottom:4px';
+      barLabel.textContent = y.count.toLocaleString();
+      var bar = document.createElement('div');
+      var heightPct = Math.max(4, Math.round((y.count / maxYearCount) * 100));
+      bar.style.cssText = 'width:100%;background:var(--accent);border-radius:4px 4px 0 0;height:' + heightPct + '%';
+      bar.title = y.year + ': ' + y.count + ' фото';
+      var yearLabel = document.createElement('div');
+      yearLabel.style.cssText = 'font-size:11px;color:var(--text-dim);margin-top:6px';
+      yearLabel.textContent = y.year;
+      barWrap.appendChild(barLabel); barWrap.appendChild(bar); barWrap.appendChild(yearLabel);
+      chart.appendChild(barWrap);
+    });
+    yearSection.appendChild(chart);
+    body.appendChild(yearSection);
+  }
+
+  // Активність по місяцях і днях тижня - поруч
+  var activityCols = document.createElement('div');
+  activityCols.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap;margin-bottom:28px';
+
+  var MONTH_NAMES = ['', 'Січ', 'Лют', 'Бер', 'Кві', 'Тра', 'Чер', 'Лип', 'Сер', 'Вер', 'Жов', 'Лис', 'Гру'];
+  var WEEKDAY_NAMES = ['Нд', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб']; // 0=Нд як у SQLite strftime %w
+
+  function buildMiniBarChart(title, items, nameFn) {
+    var section = document.createElement('div');
+    section.style.cssText = 'flex:1;min-width:280px';
+    section.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">' + title + '</div>';
+    if (!items || !items.length) {
+      section.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає даних</div>';
+      return section;
+    }
+    var maxCount = Math.max.apply(null, items.map(function(it){ return it.count; }));
+    var chart = document.createElement('div');
+    chart.style.cssText = 'display:flex;align-items:flex-end;gap:4px;height:100px';
+    items.forEach(function(it) {
+      var barWrap = document.createElement('div');
+      barWrap.style.cssText = 'flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%';
+      var bar = document.createElement('div');
+      var heightPct = Math.max(4, Math.round((it.count / maxCount) * 100));
+      bar.style.cssText = 'width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:' + heightPct + '%';
+      bar.title = nameFn(it) + ': ' + it.count;
+      var label = document.createElement('div');
+      label.style.cssText = 'font-size:10px;color:var(--text-dim);margin-top:4px';
+      label.textContent = nameFn(it);
+      barWrap.appendChild(bar); barWrap.appendChild(label);
+      chart.appendChild(barWrap);
+    });
+    section.appendChild(chart);
+    return section;
+  }
+
+  activityCols.appendChild(buildMiniBarChart('Активність по місяцях', d.by_month, function(it){ return MONTH_NAMES[it.month]; }));
+  activityCols.appendChild(buildMiniBarChart('Активність по днях тижня', d.by_weekday, function(it){ return WEEKDAY_NAMES[it.dow]; }));
+  body.appendChild(activityCols);
+
+  // Топ людей та топ локацій - горизонтальні стовпчики поруч
+  var cols = document.createElement('div');
+  cols.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap';
+
+  function buildHBarSection(title, items, labelKey, onClickItem) {
+    var section = document.createElement('div');
+    section.style.cssText = 'flex:1;min-width:280px';
+    section.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">' + title + '</div>';
+    if (!items || !items.length) {
+      section.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає даних</div>';
+      return section;
+    }
+    var maxCount = Math.max.apply(null, items.map(function(it){ return it.count; }));
+    items.forEach(function(it) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:8px' + (onClickItem ? ';cursor:pointer' : '');
+      var label = document.createElement('div');
+      label.style.cssText = 'width:120px;flex-shrink:0;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+      label.textContent = it[labelKey];
+      var barBg = document.createElement('div');
+      barBg.style.cssText = 'flex:1;background:var(--surface2);border-radius:5px;height:18px;position:relative;overflow:hidden';
+      var widthPct = Math.max(3, Math.round((it.count / maxCount) * 100));
+      var bar = document.createElement('div');
+      bar.style.cssText = 'width:' + widthPct + '%;height:100%;background:var(--accent);border-radius:5px';
+      barBg.appendChild(bar);
+      var count = document.createElement('div');
+      count.style.cssText = 'width:44px;flex-shrink:0;font-size:12px;color:var(--text-dim);text-align:right';
+      count.textContent = it.count.toLocaleString();
+      row.appendChild(label); row.appendChild(barBg); row.appendChild(count);
+      if (onClickItem) row.onclick = function(){ onClickItem(it); };
+      section.appendChild(row);
+    });
+    return section;
+  }
+
+  cols.appendChild(buildHBarSection('Топ людей за кількістю фото', d.top_people, 'name', function(it) {
+    fetch('/api/persons/' + it.id).then(function(r){ return r.json(); }).then(function(person){
+      if (person && person.id) openPerson(person);
+    });
+  }));
+  cols.appendChild(buildHBarSection('Топ локацій', d.top_places, 'city', null));
+  cols.appendChild(buildHBarSection('Топ за кількістю тегів', d.top_tagged, 'name', function(it) {
+    fetch('/api/persons/' + it.id).then(function(r){ return r.json(); }).then(function(person){
+      if (person && person.id) openPerson(person);
+    });
+  }));
+
+  body.appendChild(cols);
+
+  // Топ камер та найбільші фото
+  var cols2 = document.createElement('div');
+  cols2.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap;margin-top:28px';
+  cols2.appendChild(buildHBarSection('Топ камер/пристроїв', d.top_cameras, 'camera', null));
+
+  var largestSection = document.createElement('div');
+  largestSection.style.cssText = 'flex:1;min-width:280px';
+  largestSection.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Найбільші фото</div>';
+  if (d.top_largest && d.top_largest.length) {
+    d.top_largest.forEach(function(it) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:12px';
+      var pathEl = document.createElement('span');
+      pathEl.style.cssText = 'color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+      pathEl.textContent = it.path;
+      pathEl.title = it.path;
+      var sizeEl = document.createElement('span');
+      sizeEl.style.cssText = 'flex-shrink:0;font-weight:600';
+      sizeEl.textContent = (it.size / 1024 / 1024).toFixed(1) + ' МБ';
+      row.appendChild(pathEl); row.appendChild(sizeEl);
+      largestSection.appendChild(row);
+    });
+  } else {
+    largestSection.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає даних</div>';
+  }
+  cols2.appendChild(largestSection);
+  body.appendChild(cols2);
+
+  // Люди без тегів / без нотаток
+  var cols3 = document.createElement('div');
+  cols3.style.cssText = 'display:flex;gap:32px;flex-wrap:wrap;margin-top:28px';
+
+  function buildPersonListSection(title, total, sample) {
+    var section = document.createElement('div');
+    section.style.cssText = 'flex:1;min-width:280px';
+    section.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">' + title + ' (' + total.toLocaleString() + ')</div>';
+    if (!sample || !sample.length) {
+      section.innerHTML += '<div style="font-size:12px;color:var(--text-dim)">Немає такиx людей 🎉</div>';
+      return section;
+    }
+    var list = document.createElement('div');
+    list.style.cssText = 'display:flex;flex-wrap:wrap;gap:6px';
+    sample.forEach(function(p) {
+      var chip = document.createElement('span');
+      chip.style.cssText = 'background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:4px 10px;font-size:12px;cursor:pointer';
+      chip.textContent = p.name;
+      chip.onclick = function() {
+        fetch('/api/persons/' + p.id).then(function(r){ return r.json(); }).then(function(person){
+          if (person && person.id) openPerson(person);
+        });
+      };
+      list.appendChild(chip);
+    });
+    section.appendChild(list);
+    return section;
+  }
+
+  cols3.appendChild(buildPersonListSection('Без тегів', d.untagged_total, d.untagged_sample));
+  cols3.appendChild(buildPersonListSection('Без нотаток', d.unnoted_total, d.unnoted_sample));
+  body.appendChild(cols3);
+
+  // Прогрес індексації по роках
+  if (d.indexing_progress && d.indexing_progress.length) {
+    var progSection = document.createElement('div');
+    progSection.style.cssText = 'margin-top:28px';
+    progSection.innerHTML = '<div style="font-size:13px;font-weight:700;margin-bottom:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:.5px">Прогрес індексації по роках</div>';
+    d.indexing_progress.forEach(function(y) {
+      var row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;margin-bottom:6px';
+      var yearLabel = document.createElement('div');
+      yearLabel.style.cssText = 'width:50px;flex-shrink:0;font-size:12px';
+      yearLabel.textContent = y.year;
+      var barBg = document.createElement('div');
+      barBg.style.cssText = 'flex:1;background:var(--surface2);border-radius:5px;height:16px;overflow:hidden';
+      var bar = document.createElement('div');
+      var barColor = y.pct >= 90 ? 'var(--green)' : (y.pct >= 40 ? 'var(--accent)' : 'var(--red)');
+      bar.style.cssText = 'width:' + Math.max(2, y.pct) + '%;height:100%;background:' + barColor + ';border-radius:5px';
+      barBg.appendChild(bar);
+      var pctLabel = document.createElement('div');
+      pctLabel.style.cssText = 'width:130px;flex-shrink:0;font-size:11px;color:var(--text-dim);text-align:right';
+      pctLabel.textContent = y.with_faces.toLocaleString() + ' / ' + y.total.toLocaleString() + ' (' + y.pct + '%)';
+      row.appendChild(yearLabel); row.appendChild(barBg); row.appendChild(pctLabel);
+      progSection.appendChild(row);
+    });
+    body.appendChild(progSection);
+  }
+
+  content.innerHTML = '';
+  content.appendChild(hdr);
+  content.appendChild(body);
+}
+
 function closeGallery() {
   currentPersonId = null;
   currentPhotos = [];
@@ -1212,10 +1719,50 @@ function openLightbox(idx) {
   document.getElementById('lightbox').classList.add('open');
   renderLb();
 }
+var lbSlideshowMode = false;
+
 function closeLightbox() {
   lbStopPlay();
   document.getElementById('lightbox').classList.remove('open');
   lbResetZoom();
+  lbInfoOpen = false;
+  var infoPanel = document.getElementById('lbInfoPanel');
+  if (infoPanel) infoPanel.classList.remove('open');
+  if (lbSlideshowMode) {
+    lbSlideshowMode = false;
+    var person = allPersonsCache[currentPersonId];
+    if (person) openPerson(person);
+  }
+}
+
+async function startGallerySlideshow() {
+  if (!currentPersonId) return;
+  toast('Завантажую фото для слайдшоу...', 'info');
+  var allPhotos = [];
+  var offset = 0;
+  var batchSize = 500;
+  try {
+    var safetyCounter = 0;
+    while (safetyCounter < 300) {
+      safetyCounter++;
+      var r = await fetch('/api/persons/' + currentPersonId + '/photos?limit=' + batchSize + '&offset=' + offset);
+      var batch = await r.json();
+      if (!batch || !batch.length) break;
+      allPhotos = allPhotos.concat(batch);
+      offset += batch.length;
+      if (batch.length < batchSize) break;
+    }
+  } catch (e) {
+    toast('Помилка завантаження фото для слайдшоу', 'error');
+    return;
+  }
+  if (!allPhotos.length) { toast('Немає фото для показу', 'error'); return; }
+  // Замінюємо currentPhotos повним списком - після закриття лайтбоксу
+  // галерея перемалюється (openPerson), щоб картки знову відповідали індексам
+  currentPhotos = allPhotos;
+  lbSlideshowMode = true;
+  openLightbox(0);
+  lbStartPlay();
 }
 
 // ---- Zoom & Pan ----
@@ -1337,12 +1884,66 @@ function renderLb() {
   preloadLb(lbIndex + 1);
   preloadLb(lbIndex + 2);
   preloadLb(lbIndex - 1);
+  renderLbInfo();
 }
 
 function lbNext() { if (lbIndex < currentPhotos.length - 1) { lbIndex++; renderLb(); } }
 function lbPrev() { if (lbIndex > 0) { lbIndex--; renderLb(); } }
 function lbOpenFolder() {
   if (currentPhotos[lbIndex]) openInExplorerPath(currentPhotos[lbIndex].path);
+}
+
+var lbInfoOpen = false;
+function lbToggleInfo() {
+  var panel = document.getElementById('lbInfoPanel');
+  if (!panel) return;
+  lbInfoOpen = !lbInfoOpen;
+  if (!lbInfoOpen) { panel.classList.remove('open'); return; }
+  panel.classList.add('open');
+  renderLbInfo();
+}
+
+function escapeHtmlDF(s) {
+  return String(s).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function formatFileSize(bytes) {
+  if (bytes === null || bytes === undefined) return '—';
+  if (bytes < 1024) return bytes + ' Б';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' КБ';
+  return (bytes / 1024 / 1024).toFixed(1) + ' МБ';
+}
+
+async function renderLbInfo() {
+  if (!lbInfoOpen) return;
+  var content = document.getElementById('lbInfoContent');
+  if (!content) return;
+  var ph = currentPhotos[lbIndex];
+  if (!ph) return;
+  content.innerHTML = '<div style="text-align:center;color:var(--text-dim)">Завантаження...</div>';
+  var reqPath = ph.path;
+  try {
+    var r = await fetch('/api/photo/info?path=' + encodeURIComponent(reqPath));
+    var d = await r.json();
+    // Якщо юзер уже перемкнув фото поки чекали відповідь - ігноруємо застарілий результат
+    if (!currentPhotos[lbIndex] || currentPhotos[lbIndex].path !== reqPath) return;
+    var dateStr = ph.taken_at ? new Date(ph.taken_at * 1000).toLocaleString('uk-UA') : '—';
+    var sizeStr = formatFileSize(d.size);
+    var gpsStr = d.gps ? (d.gps.lat + ', ' + d.gps.lon) : 'немає';
+    if (d.city) gpsStr += ' (' + d.city + (d.country ? ', ' + d.country : '') + ')';
+    content.innerHTML =
+      '<div class="info-row"><span class="info-label">Назва</span><span class="info-value">' + escapeHtmlDF(d.name) + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Шлях</span><span class="info-value" style="font-size:11px;color:var(--text-dim)">' + escapeHtmlDF(d.path) + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Дата</span><span class="info-value">' + dateStr + '</span></div>' +
+      '<div class="info-row"><span class="info-label">Розмір</span><span class="info-value">' + sizeStr + '</span></div>' +
+      '<div class="info-row"><span class="info-label">GPS</span><span class="info-value">' + gpsStr + '</span></div>';
+  } catch (e) {
+    if (currentPhotos[lbIndex] && currentPhotos[lbIndex].path === reqPath) {
+      content.innerHTML = '<div style="color:var(--red)">Помилка завантаження</div>';
+    }
+  }
 }
 document.addEventListener('keydown', function(e) {
   if (!document.getElementById('lightbox').classList.contains('open')) return;
@@ -1586,6 +2187,56 @@ async function openMergeModal(srcId) {
   allPersonsCache = await r.json();
   renderMergeList(Object.values(allPersonsCache));
 }
+async function openSharedPhotosModal() {
+  mergeSourceId = null;
+  selectedSharedIds.clear();
+  document.getElementById('mergeSearch').value = '';
+  var modal = document.getElementById('mergeModal');
+  modal.classList.add('open');
+  modal.dataset.mode = 'shared';
+  var title = modal.querySelector('h3');
+  if (title) title.textContent = '🖇️ Обери 2+ людей для пошуку спільних фото';
+  document.getElementById('sharedFindBtn').style.display = '';
+  document.getElementById('sharedCount').style.display = '';
+  updateSharedCount();
+  var r = await fetch('/api/persons?limit=500');
+  var persons = await r.json();
+  allPersonsCache = {};
+  persons.forEach(function(p){ allPersonsCache[p.id] = p; });
+  renderMergeList(persons);
+}
+
+function toggleSharedSelection(personId, itemEl) {
+  if (selectedSharedIds.has(personId)) {
+    selectedSharedIds.delete(personId);
+    itemEl.classList.remove('selected');
+  } else {
+    selectedSharedIds.add(personId);
+    itemEl.classList.add('selected');
+  }
+  updateSharedCount();
+}
+
+function updateSharedCount() {
+  var countEl = document.getElementById('sharedCount');
+  var btn = document.getElementById('sharedFindBtn');
+  if (!countEl || !btn) return;
+  countEl.textContent = 'Вибрано: ' + selectedSharedIds.size;
+  btn.disabled = selectedSharedIds.size < 2;
+  btn.style.opacity = selectedSharedIds.size < 2 ? '.5' : '1';
+}
+
+function submitSharedSearch() {
+  if (selectedSharedIds.size < 2) {
+    toastHeader('Обери щонайменше 2 людей', 'error');
+    return;
+  }
+  var ids = Array.from(selectedSharedIds);
+  var names = ids.map(function(id){ return allPersonsCache[id] ? (allPersonsCache[id].name || 'Без імені') : '?'; });
+  closeMergeModal();
+  openSharedPhotosView(ids, names);
+}
+
 function closeMergeModal() {
   var modal = document.getElementById('mergeModal');
   modal.classList.remove('open');
@@ -1593,6 +2244,9 @@ function closeMergeModal() {
   var title = modal.querySelector('h3');
   if (title) title.textContent = 'Злити з людиною';
   mergeSourceId = null;
+  selectedSharedIds.clear();
+  document.getElementById('sharedFindBtn').style.display = 'none';
+  document.getElementById('sharedCount').style.display = 'none';
 }
 function filterMergeList(q) {
   var filtered = Object.values(allPersonsCache).filter(function(p) {
@@ -1607,6 +2261,8 @@ function renderMergeList(persons) {
   if (!persons || !persons.length) { list.innerHTML = '<div style="padding:12px;color:var(--text-dim);font-size:12px">Завантажте більше людей прокруткою списку</div>'; return; }
   var modal = document.getElementById('mergeModal');
   var isMove = modal.dataset.mode === 'move';
+  var isShared = modal.dataset.mode === 'shared';
+  var isDuplicate = modal.dataset.mode === 'duplicate';
   persons.filter(function(p){ return p.id !== mergeSourceId; }).forEach(function(p) {
     var item = document.createElement('div'); item.className = 'modal-item';
     var avatar;
@@ -1619,6 +2275,11 @@ function renderMergeList(persons) {
     item.appendChild(avatar); item.appendChild(info);
     if (isMove) {
       item.addEventListener('click', (function(dstId, dstName){ return function(){ clickMove(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
+    } else if (isShared) {
+      if (selectedSharedIds.has(p.id)) item.classList.add('selected');
+      item.addEventListener('click', (function(pid, itemEl){ return function(){ toggleSharedSelection(pid, itemEl); }; })(p.id, item));
+    } else if (isDuplicate) {
+      item.addEventListener('click', (function(dstId, dstName){ return function(){ clickDuplicate(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
     } else {
       item.addEventListener('click', (function(dstId, dstName){ return function(){ clickMerge(dstId, dstName); }; })(p.id, p.name || 'Без імені'));
     }
@@ -1673,6 +2334,21 @@ async function clickMove(dstId, dstName) {
   } else {
     toastHeader('Помилка переміщення', 'error');
   }
+}
+
+async function clickDuplicate(dstId, dstName) {
+  var ids = Array.from(selectedPhotoIds);
+  closeMergeModal();
+  var okCount = 0;
+  for (var i = 0; i < ids.length; i++) {
+    try {
+      var r = await fetch('/api/photos/' + ids[i] + '/duplicate-to/' + dstId, {method: 'POST'});
+      if (r.ok) okCount++;
+    } catch (e) { /* пропускаємо, рахуємо тільки успішні */ }
+  }
+  clearSelection();
+  toastHeader('🔗 ' + okCount + ' фото додано до «' + dstName + '» (лишились і тут)', 'success');
+  loadPersons(null);
 }
 
 // ---------------------------------------------------------------------------
@@ -1734,6 +2410,50 @@ async function openInExplorerPath(path) {
 // Init
 // ---------------------------------------------------------------------------
 // Version and update check
+async function openQrModal() {
+  var modal = document.getElementById('qrModal');
+  var content = document.getElementById('qrContent');
+  modal.classList.add('open');
+  content.innerHTML = '<div class="spinner"></div>';
+  try {
+    var r = await fetch('/api/lan-url');
+    var d = await r.json();
+    var pinInput = document.getElementById('pinInput');
+    if (pinInput) pinInput.value = d.pin || '';
+    var qrImgUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=' + encodeURIComponent(d.url);
+    content.innerHTML =
+      '<img src="' + qrImgUrl + '" alt="QR" style="border-radius:8px;background:#fff;padding:8px;width:220px;height:220px">' +
+      '<div style="font-size:13px;font-weight:600;user-select:all">' + escapeHtmlDF(d.url) + '</div>' +
+      '<div style="font-size:11px;color:var(--text-dim)">Телефон покаже свою сторінку входу — введи там PIN: <b style="color:var(--text);user-select:all">' + escapeHtmlDF(d.pin) + '</b></div>';
+  } catch (e) {
+    content.innerHTML = '<p style="color:var(--red);font-size:12px">Не вдалося визначити адресу в мережі</p>';
+  }
+}
+
+async function savePin() {
+  var input = document.getElementById('pinInput');
+  var pin = (input.value || '').trim();
+  if (!pin) { toast('PIN не може бути порожнім', 'error'); return; }
+  try {
+    var r = await fetch('/api/settings/pin', {
+      method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({pin: pin})
+    });
+    var d = await r.json();
+    if (d.ok) {
+      toast('✓ PIN збережено', 'success');
+      openQrModal();
+    } else {
+      toast(d.error || 'Помилка збереження', 'error');
+    }
+  } catch (e) {
+    toast('Помилка збереження PIN', 'error');
+  }
+}
+
+function closeQrModal() {
+  document.getElementById('qrModal').classList.remove('open');
+}
+
 async function initVersion() {
   try {
     var r = await fetch('/api/version');
@@ -1783,6 +2503,7 @@ async function checkAndUpdate() {
 
 initVersion();
 loadFolders();
+renderTagFilterRow();
 fetchStatus();
 setInterval(fetchStatus, 2000);
 checkUpdateSilent();
@@ -1813,6 +2534,13 @@ async function togglePlaces(personId) {
   }
 
   // Відкриваємо
+  var dateBtnEl = document.getElementById('dateFilterBtn');
+  var datePopoverEl = document.getElementById('dateFilterPopover');
+  if (dateFilterActive || (datePopoverEl && datePopoverEl.classList.contains('open'))) {
+    dateFilterActive = false; currentDateFrom = null; currentDateTo = null;
+    if (dateBtnEl) dateBtnEl.classList.remove('active');
+    if (datePopoverEl) datePopoverEl.classList.remove('open');
+  }
   placesActive = true;
   btn.classList.add('active');
   panel.classList.add('open');
@@ -1844,6 +2572,441 @@ async function togglePlaces(personId) {
   } catch(e) {
     list.innerHTML = '<div style="padding:8px;font-size:11px;color:var(--red)">Помилка: ' + e.message + '</div>';
   }
+}
+
+async function loadNoteIndicator(personId) {
+  var btn = document.getElementById('noteBtn');
+  if (!btn) return;
+  try {
+    var r = await fetch('/api/persons/' + personId + '/note');
+    var d = await r.json();
+    btn.dataset.note = d.note || '';
+    btn.classList.toggle('active', !!(d.note && d.note.trim()));
+  } catch (e) { /* тихо ігноруємо - не критично для відкриття галереї */ }
+}
+
+function toggleNotePopover(personId) {
+  var popover = document.getElementById('notePopover');
+  var btn = document.getElementById('noteBtn');
+  if (!popover || !btn) return;
+  var isOpen = popover.classList.contains('open');
+  if (isOpen) { closeNotePopover(); return; }
+  var textarea = document.getElementById('noteTextarea');
+  if (textarea) textarea.value = btn.dataset.note || '';
+  popover.classList.add('open');
+  btn.classList.add('active');
+  if (textarea) setTimeout(function(){ textarea.focus(); }, 50);
+}
+
+function closeNotePopover() {
+  var popover = document.getElementById('notePopover');
+  var btn = document.getElementById('noteBtn');
+  if (popover) popover.classList.remove('open');
+  if (btn) btn.classList.toggle('active', !!(btn.dataset.note && btn.dataset.note.trim()));
+}
+
+async function saveNote(personId) {
+  var textarea = document.getElementById('noteTextarea');
+  var btn = document.getElementById('noteBtn');
+  if (!textarea) return;
+  var note = textarea.value;
+  try {
+    await fetch('/api/persons/' + personId, {
+      method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({note: note})
+    });
+    if (btn) btn.dataset.note = note;
+    closeNotePopover();
+    toastHeader('✓ Нотатку збережено', 'success');
+  } catch (e) {
+    toastHeader('Помилка збереження нотатки', 'error');
+  }
+}
+
+async function loadTagIndicator(personId) {
+  var btn = document.getElementById('tagBtn');
+  if (!btn) return;
+  try {
+    var r = await fetch('/api/persons/' + personId + '/tags');
+    var tags = await r.json();
+    btn.dataset.count = tags.length;
+    btn.classList.toggle('active', tags.length > 0);
+  } catch (e) { /* тихо ігноруємо */ }
+}
+
+function closeTagPopover() {
+  var popover = document.getElementById('tagPopover');
+  var btn = document.getElementById('tagBtn');
+  if (popover) popover.classList.remove('open');
+  if (btn) btn.classList.toggle('active', parseInt(btn.dataset.count || '0') > 0);
+}
+
+async function toggleTagPopover(personId) {
+  var popover = document.getElementById('tagPopover');
+  var btn = document.getElementById('tagBtn');
+  if (!popover || !btn) return;
+  if (popover.classList.contains('open')) { closeTagPopover(); return; }
+  popover.classList.add('open');
+  btn.classList.add('active');
+  await renderTagPopoverContent(personId);
+}
+
+async function renderTagPopoverContent(personId) {
+  var chipsWrap = document.getElementById('personTagsChips');
+  var availWrap = document.getElementById('availableTagsChips');
+  if (!chipsWrap || !availWrap) return;
+  chipsWrap.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">Завантаження...</span>';
+  var r = await fetch('/api/persons/' + personId + '/tags');
+  var personTags = await r.json();
+  var allR = await fetch('/api/tags');
+  var allTags = await allR.json();
+  window._allTags = allTags;
+  applyTagsToCard(personId, personTags);
+
+  chipsWrap.innerHTML = '';
+  if (!personTags.length) {
+    chipsWrap.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">Немає тегів</span>';
+  } else {
+    personTags.forEach(function(t) {
+      var chip = document.createElement('span');
+      chip.style.cssText = 'background:' + t.color + ';color:#0b0b0b;font-size:11px;padding:3px 8px;border-radius:10px;display:flex;align-items:center;gap:5px';
+      chip.innerHTML = '<span>' + escapeHtmlDF(t.name) + '</span><span style="cursor:pointer;opacity:.7">✕</span>';
+      chip.querySelector('span[style*="cursor"]').onclick = async function() {
+        await fetch('/api/persons/' + personId + '/tags/' + t.id, {method: 'DELETE'});
+        await renderTagPopoverContent(personId);
+        loadTagIndicator(personId);
+        renderTagFilterRow();
+        if (currentTagFilter) loadPersons(null);
+      };
+      chipsWrap.appendChild(chip);
+    });
+  }
+
+  var assignedIds = personTags.map(function(t){ return t.id; });
+  var available = allTags.filter(function(t){ return assignedIds.indexOf(t.id) === -1; });
+  availWrap.innerHTML = '';
+  if (!available.length) {
+    availWrap.innerHTML = '<span style="font-size:11px;color:var(--text-dim)">Немає інших тегів</span>';
+  } else {
+    available.forEach(function(t) {
+      var chip = document.createElement('span');
+      chip.style.cssText = 'background:var(--surface2);border:1px solid ' + t.color + ';color:var(--text);font-size:11px;padding:3px 8px;border-radius:10px;cursor:pointer';
+      chip.textContent = '+ ' + t.name;
+      chip.onclick = async function() {
+        await fetch('/api/persons/' + personId + '/tags', {
+          method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({tag_id: t.id})
+        });
+        await renderTagPopoverContent(personId);
+        loadTagIndicator(personId);
+        renderTagFilterRow();
+        if (currentTagFilter) loadPersons(null);
+      };
+      availWrap.appendChild(chip);
+    });
+  }
+}
+
+function applyTagsToCard(personId, tags) {
+  if (allPersonsCache[personId]) allPersonsCache[personId].tags = tags;
+  var card = document.querySelector('.person-card[data-id="' + personId + '"]');
+  if (!card) return;
+  var avatarEl = card.querySelector('.person-avatar, .person-avatar-ph');
+  if (!avatarEl || !avatarEl.parentElement) return;
+  var wrap = avatarEl.parentElement;
+  var existingDots = wrap.querySelector('.tag-dots');
+  if (existingDots) existingDots.remove();
+  if (tags && tags.length) {
+    var dotsWrap = document.createElement('div'); dotsWrap.className = 'tag-dots';
+    dotsWrap.title = tags.map(function(t){ return t.name; }).join(', ');
+    tags.forEach(function(t) {
+      var dot = document.createElement('span');
+      dot.style.cssText = 'width:6px;height:6px;border-radius:50%;background:' + t.color + ';display:block';
+      dotsWrap.appendChild(dot);
+    });
+    wrap.appendChild(dotsWrap);
+  }
+}
+
+async function createAndAssignTag(personId, name) {
+  name = (name || '').trim();
+  if (!name) return;
+  await fetch('/api/persons/' + personId + '/tags', {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name: name})
+  });
+  await renderTagPopoverContent(personId);
+  loadTagIndicator(personId);
+  renderTagFilterRow();
+  if (currentTagFilter) loadPersons(null);
+}
+
+function toggleDateFilter(personId) {
+  var popover = document.getElementById('dateFilterPopover');
+  var btn = document.getElementById('dateFilterBtn');
+  if (!popover || !btn) return;
+  var isOpen = popover.classList.contains('open');
+  if (isOpen) {
+    popover.classList.remove('open');
+    if (!dateFilterActive) btn.classList.remove('active');
+    return;
+  }
+  // Фільтр вже застосований — одне натискання одразу скидає, без відкриття попапу
+  if (dateFilterActive) {
+    resetDateFilter();
+    return;
+  }
+  // Закриваємо панель "Де знято", якщо відкрита
+  var placesPanel = document.getElementById('placesPanel');
+  var placesBtnEl = document.getElementById('placesBtn');
+  if (placesPanel && placesPanel.classList.contains('open')) {
+    placesActive = false;
+    currentPlaceFilter = null;
+    if (placesBtnEl) placesBtnEl.classList.remove('active');
+    placesPanel.classList.remove('open');
+  }
+  var fromInput = document.getElementById('dateFromInput');
+  var toInput = document.getElementById('dateToInput');
+  if (fromInput) fromInput.value = currentDateFrom || '';
+  if (toInput) toInput.value = currentDateTo || '';
+  popover.classList.add('open');
+  btn.classList.add('active');
+}
+
+document.addEventListener('click', function(e) {
+  document.querySelectorAll('.date-filter-wrap').forEach(function(wrap) {
+    if (wrap.contains(e.target)) return;
+    var popover = wrap.querySelector('.date-filter-popover');
+    if (!popover || !popover.classList.contains('open')) return;
+    if (popover.id === 'dateFilterPopover') {
+      popover.classList.remove('open');
+      if (!dateFilterActive) {
+        var btn = wrap.querySelector('.gallery-toolbar-btn');
+        if (btn) btn.classList.remove('active');
+      }
+    } else if (popover.id === 'notePopover') {
+      closeNotePopover();
+    } else if (popover.id === 'tagPopover') {
+      closeTagPopover();
+    } else {
+      popover.classList.remove('open');
+    }
+  });
+});
+
+function applyDateFilter(personId) {
+  var fromInput = document.getElementById('dateFromInput');
+  var toInput = document.getElementById('dateToInput');
+  var from = fromInput ? fromInput.value : '';
+  var to = toInput ? toInput.value : '';
+  if (!from && !to) { toast('Вкажи хоча б одну дату', 'error'); return; }
+  if (from && to && from > to) { toast('«Від» не може бути пізніше «До»', 'error'); return; }
+  currentDateFrom = from || null;
+  currentDateTo = to || null;
+  dateFilterActive = true;
+  var popover = document.getElementById('dateFilterPopover');
+  if (popover) popover.classList.remove('open');
+  loadDateFilteredPhotos(personId);
+}
+
+function resetDateFilter() {
+  dateFilterActive = false;
+  currentDateFrom = null;
+  currentDateTo = null;
+  var btn = document.getElementById('dateFilterBtn');
+  var popover = document.getElementById('dateFilterPopover');
+  if (btn) btn.classList.remove('active');
+  if (popover) popover.classList.remove('open');
+  var person = allPersonsCache[currentPersonId];
+  if (person) openPerson(person);
+}
+
+function openSharedPhotosView(personIds, names) {
+  currentPersonId = null;
+  document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
+  var content = document.getElementById('contentArea');
+  content.innerHTML = '';
+
+  var hdr = document.createElement('div'); hdr.className = 'content-header';
+  var h2 = document.createElement('h2'); h2.textContent = '🖇️ Спільні фото: ' + names.join(', ');
+  var cnt = document.createElement('span'); cnt.id = 'sharedPhotosCount';
+  cnt.style.cssText = 'color:var(--text-dim);font-size:12px;white-space:nowrap';
+  var closeBtn = document.createElement('button'); closeBtn.className = 'close-gallery-btn';
+  closeBtn.textContent = '✕ Закрити'; closeBtn.onclick = function(){ closeGallery(); };
+  hdr.appendChild(h2); hdr.appendChild(cnt); hdr.appendChild(closeBtn);
+  content.appendChild(hdr);
+
+  var galleryWrap = document.createElement('div'); galleryWrap.className = 'gallery-wrap';
+  var grid = document.createElement('div'); grid.className = 'photo-grid'; grid.id = 'photoGrid';
+  grid.addEventListener('click', function(e) {
+    if (selectedPhotoIds.size > 0 && !e.target.closest('.photo-card')) clearSelection();
+  });
+
+  var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
+  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.style.cssText = 'color:var(--text);font-size:13px;font-weight:600;flex:1';
+  var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
+  shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
+  var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
+  saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
+  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
+  cancelSelBtn.onclick = function(){ clearSelection(); };
+  selBar.appendChild(selCount); selBar.appendChild(shareSelBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
+
+  galleryWrap.appendChild(grid);
+  galleryWrap.appendChild(selBar);
+  content.appendChild(galleryWrap);
+
+  selectedPhotoIds.clear();
+  lastSelectedIdx = -1;
+  loadSharedPhotos(personIds);
+}
+
+async function loadSharedPhotos(personIds) {
+  var grid = document.getElementById('photoGrid');
+  if (!grid) return;
+  if (currentAbort) currentAbort.abort();
+  currentAbort = new AbortController();
+  var abortSignal = currentAbort.signal;
+
+  grid.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Шукаю спільні фото...</p></div>';
+  currentPhotos = [];
+  lastRenderedYear = null;
+  var offset = 0;
+  var batchSize = 200;
+  var done = false;
+  var firstBatch = true;
+
+  function removeSentinel() {
+    var s = document.getElementById('loadMoreBtn');
+    if (s) s.remove();
+  }
+  function ensureSentinel() {
+    removeSentinel();
+    var sentinel = document.createElement('div');
+    sentinel.id = 'loadMoreBtn';
+    sentinel.style.cssText = 'grid-column:1/-1;height:20px;background:transparent';
+    grid.appendChild(sentinel);
+  }
+
+  async function loadMore() {
+    if (done || abortSignal.aborted) return;
+    var params = new URLSearchParams();
+    params.set('person_ids', personIds.join(','));
+    params.set('limit', batchSize);
+    params.set('offset', offset);
+    try {
+      var r = await fetch('/api/shared-photos?' + params.toString(), { signal: abortSignal });
+      if (abortSignal.aborted) return;
+      var batch = await r.json();
+      if (firstBatch) { grid.innerHTML = ''; firstBatch = false; }
+      if (!batch.length) {
+        done = true;
+        removeSentinel();
+        if (!currentPhotos.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="empty-icon">🖇️</div><p>Спільних фото не знайдено</p></div>';
+        }
+        var cntEl = document.getElementById('sharedPhotosCount');
+        if (cntEl) cntEl.textContent = currentPhotos.length + ' фото';
+        return;
+      }
+      batch.forEach(function(ph) { currentPhotos.push(ph); appendPhotoCard(ph, currentPhotos.length - 1, grid); });
+      offset += batch.length;
+      var cntEl2 = document.getElementById('sharedPhotosCount');
+      if (cntEl2) cntEl2.textContent = currentPhotos.length + '+ фото';
+      if (batch.length < batchSize) {
+        done = true; removeSentinel();
+        if (cntEl2) cntEl2.textContent = currentPhotos.length + ' фото';
+        return;
+      }
+      ensureSentinel();
+    } catch(e) {
+      if (abortSignal.aborted) return;
+      if (firstBatch) grid.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Помилка: ' + e.message + '</p></div>';
+    }
+  }
+
+  window._photoScrollFn = function() {
+    if (done) return;
+    if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 300) loadMore();
+  };
+  grid.addEventListener('scroll', window._photoScrollFn);
+
+  await loadMore();
+  setTimeout(function() {
+    if (!done && grid.scrollHeight <= grid.clientHeight + 50) loadMore();
+  }, 150);
+}
+
+async function loadDateFilteredPhotos(personId) {
+  var grid = document.getElementById('photoGrid');
+  if (!grid) return;
+  if (currentAbort) currentAbort.abort();
+  if (window._photoScrollFn) {
+    grid.removeEventListener('scroll', window._photoScrollFn);
+    window._photoScrollFn = null;
+  }
+  var oldSentinel = document.getElementById('loadMoreBtn'); if (oldSentinel) oldSentinel.remove();
+  var oldPrevBtn = document.getElementById('loadPrevBtn'); if (oldPrevBtn) oldPrevBtn.remove();
+
+  grid.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Завантаження...</p></div>';
+  currentPhotos = [];
+  lastRenderedYear = null;
+  currentAbort = new AbortController();
+  var abortSignal = currentAbort.signal;
+  var offset = 0;
+  var batchSize = 200;
+  var done = false;
+  var firstBatch = true;
+
+  function removeSentinel() {
+    var s = document.getElementById('loadMoreBtn');
+    if (s) s.remove();
+  }
+  function ensureSentinel() {
+    removeSentinel();
+    var sentinel = document.createElement('div');
+    sentinel.id = 'loadMoreBtn';
+    sentinel.style.cssText = 'grid-column:1/-1;height:20px;background:transparent';
+    grid.appendChild(sentinel);
+  }
+
+  async function loadMore() {
+    if (done || abortSignal.aborted) return;
+    var params = new URLSearchParams();
+    params.set('limit', batchSize);
+    params.set('offset', offset);
+    if (currentDateFrom) params.set('date_from', currentDateFrom);
+    if (currentDateTo) params.set('date_to', currentDateTo);
+    try {
+      var r = await fetch('/api/persons/' + personId + '/photos?' + params.toString(), { signal: abortSignal });
+      if (abortSignal.aborted) return;
+      var batch = await r.json();
+      if (firstBatch) { grid.innerHTML = ''; firstBatch = false; }
+      if (!batch.length) {
+        done = true;
+        removeSentinel();
+        if (!currentPhotos.length) {
+          grid.innerHTML = '<div class="empty-state"><div class="empty-icon">📅</div><p>Фото за цей період не знайдено</p></div>';
+        }
+        return;
+      }
+      batch.forEach(function(ph) { currentPhotos.push(ph); appendPhotoCard(ph, currentPhotos.length - 1, grid); });
+      offset += batch.length;
+      if (batch.length < batchSize) { done = true; removeSentinel(); return; }
+      ensureSentinel();
+    } catch(e) {
+      if (abortSignal.aborted) return;
+      if (firstBatch) grid.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Помилка: ' + e.message + '</p></div>';
+    }
+  }
+
+  window._photoScrollFn = function() {
+    if (done) return;
+    if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 300) loadMore();
+  };
+  grid.addEventListener('scroll', window._photoScrollFn);
+
+  await loadMore();
+  setTimeout(function() {
+    if (!done && grid.scrollHeight <= grid.clientHeight + 50) loadMore();
+  }, 150);
 }
 
 async function loadPlacePhotos(personId, city) {

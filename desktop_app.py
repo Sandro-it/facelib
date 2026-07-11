@@ -5,6 +5,7 @@ import time
 import sys
 import os
 import ctypes
+import shutil
 
 server_process = None
 
@@ -64,6 +65,42 @@ class Api:
             traceback.print_exc()
             return {"ok": False, "error": str(e)}
 
+    def choose_folder(self):
+        """Відкриває нативний діалог вибору папки Windows."""
+        try:
+            result = window.create_file_dialog(webview.FOLDER_DIALOG)
+            if not result:
+                return {"ok": False, "cancelled": True}
+            return {"ok": True, "folder": result[0]}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {"ok": False, "error": str(e)}
+
+    def copy_files_to_folder(self, paths, folder):
+        """Копіює список файлів у вказану папку. При співпадінні імені додає (2), (3) тощо, не перезаписуючи існуюче."""
+        try:
+            if not os.path.isdir(folder):
+                return {"ok": False, "error": "Папка не знайдена"}
+            copied = 0
+            for src in paths:
+                if not os.path.isfile(src):
+                    continue
+                name = os.path.basename(src)
+                base, ext = os.path.splitext(name)
+                dest = os.path.join(folder, name)
+                i = 2
+                while os.path.exists(dest):
+                    dest = os.path.join(folder, f"{base} ({i}){ext}")
+                    i += 1
+                shutil.copy2(src, dest)
+                copied += 1
+            return {"ok": True, "copied": copied, "total": len(paths)}
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return {"ok": False, "error": str(e)}
+
     def start_drag(self, paths):
         """Запускає нативний OLE DragDrop з файлами."""
         import threading
@@ -112,7 +149,7 @@ def start_server():
     venv_python = os.path.join(dir_path, ".venv", "Scripts", "python.exe")
     python = venv_python if os.path.exists(venv_python) else sys.executable
     server_process = subprocess.Popen(
-        [python, "-m", "uvicorn", "app:app", "--host", "127.0.0.1", "--port", "7789"],
+        [python, "-m", "uvicorn", "app:app", "--host", "0.0.0.0", "--port", "7789"],
         cwd=dir_path,
         creationflags=subprocess.CREATE_NO_WINDOW
     )
