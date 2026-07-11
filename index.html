@@ -747,7 +747,10 @@ async function renderTagFilterRow() {
   var allChip = document.createElement('span');
   allChip.className = 'tag-filter-chip' + (!currentTagFilter ? ' active' : '');
   allChip.textContent = 'Усі';
-  allChip.onclick = function() { currentTagFilter = null; renderTagFilterRow(); loadPersons(null); };
+  allChip.onclick = function() {
+    if (currentHighlightIds) { clearPhotoSearch(); }
+    currentTagFilter = null; renderTagFilterRow(); loadPersons(null);
+  };
 
   var chips = [allChip];
   tags.forEach(function(t) {
@@ -756,6 +759,10 @@ async function renderTagFilterRow() {
     chip.textContent = t.name;
     if (currentTagFilter === t.id) { chip.style.background = t.color; chip.style.borderColor = t.color; }
     chip.onclick = function() {
+      if (currentHighlightIds) {
+        clearPhotoSearch();
+        toast('Фільтр за тегом ховав би знайдені збіги - пошук скинуто', '');
+      }
       currentTagFilter = (currentTagFilter === t.id ? null : t.id);
       renderTagFilterRow(); loadPersons(null);
     };
@@ -1032,6 +1039,7 @@ async function openPerson(p) {
   dateFilterActive = false;
   currentDateFrom = null;
   currentDateTo = null;
+  slideshowGen++; // скасовуємо будь-яке слайдшоу, що ще вантажиться для попередньої людини
   document.querySelectorAll('.person-card').forEach(function(c){ c.classList.toggle('active', +c.dataset.id === p.id); });
   var content = document.getElementById('contentArea');
   content.innerHTML = '';
@@ -1375,6 +1383,7 @@ async function openPerson(p) {
 async function openArchiveStats() {
   currentPersonId = null;
   currentPhotos = [];
+  slideshowGen++;
   document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
   var content = document.getElementById('contentArea');
   content.innerHTML = '<div class="empty-state"><div class="spinner"></div><p style="margin-top:8px">Рахую статистику...</p></div>';
@@ -1383,6 +1392,10 @@ async function openArchiveStats() {
   try {
     var r = await fetch('/api/stats');
     d = await r.json();
+    if (!r.ok || d.error) {
+      content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Не вдалося завантажити статистику' + (d.error ? ':<br><span style="font-size:11px;color:var(--text-dim)">' + escapeHtmlDF(d.error) + '</span>' : '') + '</p></div>';
+      return;
+    }
   } catch (e) {
     content.innerHTML = '<div class="empty-state"><p style="color:var(--red)">Не вдалося завантажити статистику</p></div>';
     return;
@@ -1649,6 +1662,7 @@ async function openArchiveStats() {
 function closeGallery() {
   currentPersonId = null;
   currentPhotos = [];
+  slideshowGen++; // скасовуємо будь-яке слайдшоу, що ще вантажиться
   document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
   document.getElementById('contentArea').innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><p>Обери людину зліва або запусти індексацію архіву</p></div>';
 }
@@ -1720,6 +1734,7 @@ function openLightbox(idx) {
   renderLb();
 }
 var lbSlideshowMode = false;
+var slideshowGen = 0; // зростає при кожному новому запуску слайдшоу і при переході на іншу людину/закритті - старі запити себе скасовують
 
 function closeLightbox() {
   lbStopPlay();
@@ -1737,15 +1752,23 @@ function closeLightbox() {
 
 async function startGallerySlideshow() {
   if (!currentPersonId) return;
-  toast('Завантажую фото для слайдшоу...', 'info');
+  var myGen = ++slideshowGen;
+  var targetPersonId = currentPersonId;
+  var btn = document.getElementById('slideshowBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Завантажую...'; }
+
+  function isStale() { return myGen !== slideshowGen; }
+  function resetBtn() { if (btn) { btn.disabled = false; btn.textContent = '🎬 Слайдшоу'; } }
+
   var allPhotos = [];
   var offset = 0;
   var batchSize = 500;
   try {
     var safetyCounter = 0;
     while (safetyCounter < 300) {
+      if (isStale()) return; // почався новіший запит або перейшли на іншу людину - тихо виходимо
       safetyCounter++;
-      var r = await fetch('/api/persons/' + currentPersonId + '/photos?limit=' + batchSize + '&offset=' + offset);
+      var r = await fetch('/api/persons/' + targetPersonId + '/photos?limit=' + batchSize + '&offset=' + offset);
       var batch = await r.json();
       if (!batch || !batch.length) break;
       allPhotos = allPhotos.concat(batch);
@@ -1753,9 +1776,11 @@ async function startGallerySlideshow() {
       if (batch.length < batchSize) break;
     }
   } catch (e) {
-    toast('Помилка завантаження фото для слайдшоу', 'error');
+    if (!isStale()) { resetBtn(); toast('Помилка завантаження фото для слайдшоу', 'error'); }
     return;
   }
+  resetBtn();
+  if (isStale()) return; // поки вантажилось - клікнули ще раз або перейшли деінде
   if (!allPhotos.length) { toast('Немає фото для показу', 'error'); return; }
   // Замінюємо currentPhotos повним списком - після закриття лайтбоксу
   // галерея перемалюється (openPerson), щоб картки знову відповідали індексам
@@ -1966,6 +1991,7 @@ function lbTogglePlay() {
 }
 
 function lbStartPlay() {
+  lbStopPlay(); // гарантуємо, що попередній таймер (якщо був) точно зупинений - інакше кілька таймерів "б'ються" одне з одним
   var btn = document.getElementById('lbPlayBtn');
   if (btn) btn.textContent = '⏸';
   lbPlayTimer = setInterval(function() {
@@ -2377,6 +2403,8 @@ async function searchByFile(file) {
   if (txt) txt.textContent = '⏳ Шукаємо...';
   if (res) { res.style.display = 'none'; res.innerHTML = ''; }
   currentHighlightIds = null;
+  // Пошук за фото - наскрізна функція, не повинна ховати збіги через активний фільтр тега
+  if (currentTagFilter) { currentTagFilter = null; renderTagFilterRow(); }
   var fd = new FormData(); fd.append('file', file);
   try {
     var r = await fetch('/api/search', {method:'POST', body:fd});
@@ -2820,6 +2848,7 @@ function resetDateFilter() {
 
 function openSharedPhotosView(personIds, names) {
   currentPersonId = null;
+  slideshowGen++;
   document.querySelectorAll('.person-card').forEach(function(c){ c.classList.remove('active'); });
   var content = document.getElementById('contentArea');
   content.innerHTML = '';

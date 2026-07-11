@@ -215,51 +215,58 @@ def ensure_indexes():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_persons_name ON persons(name)")
 
 def ensure_migrations():
-    """Safe migrations for existing databases."""
+    """Safe migrations for existing databases. Кожен ALTER - незалежна спроба:
+    якщо один впаде, решта все одно виконаються (а не тихо пропустяться всі разом)."""
+    def try_alter(conn, sql):
+        try:
+            conn.execute(sql)
+        except Exception as e:
+            print(f"[migration] пропущено ({e}): {sql}")
+
     with get_db() as conn:
-        # Add is_favorite and sort_order if not exist
         cols = [r[1] for r in conn.execute("PRAGMA table_info(persons)").fetchall()]
         if 'is_favorite' not in cols:
-            conn.execute("ALTER TABLE persons ADD COLUMN is_favorite INTEGER DEFAULT 0")
+            try_alter(conn, "ALTER TABLE persons ADD COLUMN is_favorite INTEGER DEFAULT 0")
         if 'sort_order' not in cols:
-            conn.execute("ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
+            try_alter(conn, "ALTER TABLE persons ADD COLUMN sort_order INTEGER DEFAULT 0")
         if 'note' not in cols:
-            conn.execute("ALTER TABLE persons ADD COLUMN note TEXT")
-        # Add per-tag favorite/order columns if not exist
+            try_alter(conn, "ALTER TABLE persons ADD COLUMN note TEXT")
+
         pt_cols = [r[1] for r in conn.execute("PRAGMA table_info(person_tags)").fetchall()]
         if 'is_favorite' not in pt_cols:
-            conn.execute("ALTER TABLE person_tags ADD COLUMN is_favorite INTEGER DEFAULT 0")
+            try_alter(conn, "ALTER TABLE person_tags ADD COLUMN is_favorite INTEGER DEFAULT 0")
         if 'sort_order' not in pt_cols:
-            conn.execute("ALTER TABLE person_tags ADD COLUMN sort_order INTEGER DEFAULT 0")
-        # Add size/camera cache columns for stats (lazy-filled, like city/country)
+            try_alter(conn, "ALTER TABLE person_tags ADD COLUMN sort_order INTEGER DEFAULT 0")
+
         photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]
         if 'size' not in photo_cols:
-            conn.execute("ALTER TABLE photos ADD COLUMN size INTEGER")
+            try_alter(conn, "ALTER TABLE photos ADD COLUMN size INTEGER")
         if 'camera' not in photo_cols:
-            conn.execute("ALTER TABLE photos ADD COLUMN camera TEXT")
-        # Add geo_cache table if not exists
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS geo_cache (
-                lat_lon TEXT PRIMARY KEY,
-                city TEXT,
-                country TEXT,
-                cached_at REAL DEFAULT (unixepoch())
-            )
-        """)
-        # Add city column to photos for caching
-        photo_cols = [r[1] for r in conn.execute("PRAGMA table_info(photos)").fetchall()]
+            try_alter(conn, "ALTER TABLE photos ADD COLUMN camera TEXT")
         if 'city' not in photo_cols:
-            conn.execute("ALTER TABLE photos ADD COLUMN city TEXT")
+            try_alter(conn, "ALTER TABLE photos ADD COLUMN city TEXT")
         if 'country' not in photo_cols:
-            conn.execute("ALTER TABLE photos ADD COLUMN country TEXT")
+            try_alter(conn, "ALTER TABLE photos ADD COLUMN country TEXT")
+
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS geo_cache (
+                    lat_lon TEXT PRIMARY KEY,
+                    city TEXT,
+                    country TEXT,
+                    cached_at REAL DEFAULT (unixepoch())
+                )
+            """)
+        except Exception as e:
+            print(f"[migration] geo_cache: {e}")
+
+init_db()
 
 try:
     ensure_indexes()
     ensure_migrations()
-except Exception:
-    pass
-
-init_db()
+except Exception as e:
+    print(f"[migration] неочікувана помилка: {e}")
 
 # ---------------------------------------------------------------------------
 # InsightFace loader
@@ -550,6 +557,14 @@ def _fill_missing_size_camera(db):
 
 @app.get("/api/stats")
 def archive_stats():
+    try:
+        return _archive_stats_impl()
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+def _archive_stats_impl():
     import datetime
     db = get_db()
     photos_total = db.execute("SELECT COUNT(*) FROM photos").fetchone()[0]
