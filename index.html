@@ -459,59 +459,49 @@ function updateSelectionBar() {
   updateSelectionBarLayout();
 }
 
-var selBarLayoutGen = 0;
-
 function updateSelectionBarLayout() {
   var bar = document.getElementById('selectionBar');
   if (!bar || !bar.classList.contains('visible')) return;
-  var myGen = ++selBarLayoutGen;
+
+  function sumChildrenWidth() {
+    var needed = 0;
+    var children = bar.children;
+    for (var i = 0; i < children.length; i++) {
+      needed += children[i].getBoundingClientRect().width;
+    }
+    needed += 8 * Math.max(0, children.length - 1);
+    return needed;
+  }
+  function availableWidth() {
+    var style = getComputedStyle(bar);
+    var padLeft = parseFloat(style.paddingLeft) || 0;
+    var padRight = parseFloat(style.paddingRight) || 0;
+    return bar.getBoundingClientRect().width - padLeft - padRight;
+  }
+
+  // 1. Знімаємо стиснення і ПРИМУСОВО змушуємо браузер перемалювати синхронно
+  //    (читання offsetHeight форсує reflow тут і зараз - без очікування rAF/таймерів,
+  //    тому вимір нижче завжди відповідає щойно застосованому стану, без гонки)
   bar.classList.remove('tight', 'icons-only');
-  // Подвійний rAF - гарантуємо що лейаут (щойно доданий клас visible) уже застосований браузером
-  requestAnimationFrame(function() {
-    requestAnimationFrame(function() {
-      if (myGen !== selBarLayoutGen) return; // почався новіший вимір (наприклад через швидку зміну розміру вікна) - виходимо
-      if (!bar.classList.contains('visible')) return;
+  void bar.offsetHeight;
 
-      function measureAvailable() {
-        var barRect = bar.getBoundingClientRect();
-        if (barRect.width < 10) return null; // лейаут ще не готовий
-        var style = getComputedStyle(bar);
-        var padLeft = parseFloat(style.paddingLeft) || 0;
-        var padRight = parseFloat(style.paddingRight) || 0;
-        return barRect.width - padLeft - padRight;
-      }
-      function measureNeeded() {
-        var needed = 0;
-        var children = bar.children;
-        for (var i = 0; i < children.length; i++) {
-          needed += children[i].getBoundingClientRect().width;
-        }
-        needed += 8 * Math.max(0, children.length - 1);
-        return needed;
-      }
+  var available = availableWidth();
+  if (available < 10) return; // лейаут ще не готовий (напр. панель щойно з'явилась)
 
-      var available = measureAvailable();
-      if (available === null) return;
+  // 2. Повний розмір влазить в один рядок - лишаємо як є
+  if (sumChildrenWidth() <= available) return;
 
-      // 1. Повний розмір влазить в один рядок - нічого стискати не треба
-      if (measureNeeded() <= available) return;
+  // 3. Пробуємо стиснутий розмір (менші відступи/шрифт, текст лишається)
+  bar.classList.add('tight');
+  void bar.offsetHeight;
+  var tightNeeded = sumChildrenWidth();
+  // Дозволяємо перенесення на 1-2 додаткові рядки в стиснутому вигляді з текстом -
+  // тільки якщо навіть цього не вистачить (знадобилось би 3+ рядки), переходимо на іконки
+  if (tightNeeded <= available * 2.2) return;
 
-      // 2. Пробуємо стиснутий розмір (менші відступи/шрифт, текст лишається)
-      bar.classList.add('tight');
-      requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
-          if (myGen !== selBarLayoutGen) return; // застарілий вимір - новіший вже почався
-          if (!bar.classList.contains('visible')) return;
-          var tightNeeded = measureNeeded();
-          // Дозволяємо перенесення на 1-2 додаткові рядки в стиснутому вигляді з текстом -
-          // тільки якщо навіть цього не вистачить (знадобилось би 3+ рядки), переходимо на іконки
-          if (tightNeeded <= available * 2.2) return;
-          bar.classList.remove('tight');
-          bar.classList.add('icons-only');
-        });
-      });
-    });
-  });
+  bar.classList.remove('tight');
+  bar.classList.add('icons-only');
+  void bar.offsetHeight;
 }
 
 window.addEventListener('resize', function() {
