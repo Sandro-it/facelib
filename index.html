@@ -124,7 +124,18 @@
   .photo-card:hover .photo-select-cb, .photo-card.selected .photo-select-cb{display:block}
   .photo-card.selected{outline:2px solid var(--accent);outline-offset:-2px}
   .photo-card.selected img{opacity:0.85}
-  .selection-bar{display:none;position:fixed;bottom:0;left:210px;right:0;z-index:200;background:var(--surface2);border-top:2px solid var(--accent);padding:10px 20px;align-items:center;gap:10px}
+  .selection-bar{display:none;position:fixed;bottom:0;left:270px;right:0;z-index:200;background:var(--surface2);border-top:2px solid var(--accent);padding:10px 20px;align-items:center;gap:8px;flex-wrap:wrap;row-gap:8px}
+  .selection-bar .sel-count{color:var(--text);font-size:13px;font-weight:600;white-space:nowrap;margin-right:4px}
+  .selection-bar .btn{white-space:nowrap;padding:7px 11px;font-size:12px;transition:none}
+  .selection-bar .btn-icon{display:inline-block}
+  .selection-bar .btn-label{display:inline}
+  .selection-bar.tight{gap:5px;padding:7px 10px}
+  .selection-bar.tight .btn{padding:5px 8px;font-size:11px}
+  .selection-bar.tight .sel-count{font-size:12px}
+  .selection-bar.icons-only{gap:4px;padding:6px 8px}
+  .selection-bar.icons-only .btn{padding:6px;font-size:11px}
+  .selection-bar.icons-only .btn-label{display:none}
+  .selection-bar.icons-only .sel-count{flex:0 0 100%;margin-bottom:2px;font-size:11px}
   .selection-bar.visible{display:flex}
   .overlay-btn{font-size:10px;color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:3px 7px;cursor:pointer;font-family:var(--font);transition:background .15s}
   .overlay-btn:hover{background:rgba(255,255,255,.32)}
@@ -196,7 +207,7 @@
   /* Modals */
   .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:150;align-items:center;justify-content:center}
   .modal-bg.open{display:flex}
-  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:380px;max-height:75vh;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;width:380px;max-width:calc(100vw - 32px);max-height:80vh;display:flex;flex-direction:column;gap:14px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   .modal h3{font-size:15px;font-weight:700}
   .modal-search{background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:7px 12px;font-size:13px;font-family:var(--font);outline:none;width:100%}
   .modal-search:focus{border-color:var(--accent)}
@@ -213,7 +224,7 @@
   .modal-footer{display:flex;gap:8px;justify-content:flex-end}
 
   /* Confirm dialog */
-  .confirm-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:360px;display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .confirm-box{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px;width:360px;max-width:calc(100vw - 32px);display:flex;flex-direction:column;gap:16px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
   .confirm-box h3{font-size:15px;font-weight:700}
   .confirm-box p{font-size:13px;color:var(--text-dim);line-height:1.6}
   .confirm-box .warning{background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.2);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--red)}
@@ -338,7 +349,7 @@
 
 <!-- QR / локальна мережа -->
 <div class="modal-bg" id="qrModal" onclick="if(event.target===this)closeQrModal()">
-  <div class="modal" style="text-align:center;max-width:320px">
+  <div class="modal" style="text-align:center;max-width:min(320px, calc(100vw - 32px))">
     <h3>📱 Відкрити на телефоні</h3>
     <p style="font-size:12px;color:var(--text-dim);margin:4px 0 14px">Телефон має бути в тій самій Wi-Fi мережі, що й цей комп'ютер</p>
     <div id="qrContent" style="display:flex;flex-direction:column;align-items:center;gap:12px">
@@ -445,6 +456,68 @@ function updateSelectionBar() {
     bar.classList.remove('visible');
     document.getElementById('photoGrid').style.userSelect = '';
   }
+  updateSelectionBarLayout();
+}
+
+function updateSelectionBarLayout() {
+  var bar = document.getElementById('selectionBar');
+  if (!bar || !bar.classList.contains('visible')) return;
+
+  function countRows() {
+    var kids = bar.children;
+    if (!kids.length) return 1;
+    var firstRect = kids[0].getBoundingClientRect();
+    var firstCenter = firstRect.top + firstRect.height / 2;
+    var rows = 1;
+    for (var i = 1; i < kids.length; i++) {
+      var r = kids[i].getBoundingClientRect();
+      var center = r.top + r.height / 2;
+      if (Math.abs(center - firstCenter) > 8) {
+        rows++;
+        firstCenter = center;
+      }
+    }
+    return rows;
+  }
+
+  // Даємо браузеру самому природно перенести кнопки (flex-wrap), а тоді рахуємо,
+  // скільки рядків реально вийшло за позиціями елементів - це надійніше за спробу
+  // передбачити це арифметично (сума ширин не завжди точно відповідає реальному wrap).
+  bar.classList.remove('tight', 'icons-only');
+  void bar.offsetHeight;
+
+  var fullRows = countRows();
+  if (fullRows <= 1) return;
+
+  bar.classList.add('tight');
+  void bar.offsetHeight;
+  var tightRows = countRows();
+  if (tightRows <= 2) return;
+
+  bar.classList.remove('tight');
+  bar.classList.add('icons-only');
+  void bar.offsetHeight;
+}
+
+window.addEventListener('resize', function() {
+  clearTimeout(window._selBarResizeTimer);
+  window._selBarResizeTimer = setTimeout(updateSelectionBarLayout, 60);
+});
+
+// ResizeObserver надійніший за window.resize у деяких webview-рушіях (там подія resize
+// може спрацьовувати із запізненням або пропускатись) - стежимо напряму за контентною зоною,
+// яка й визначає доступну ширину панелі вибору
+if (window.ResizeObserver) {
+  var selBarResizeObserver = new ResizeObserver(function() {
+    clearTimeout(window._selBarResizeTimer);
+    window._selBarResizeTimer = setTimeout(updateSelectionBarLayout, 60);
+  });
+  document.addEventListener('DOMContentLoaded', function() {
+    var contentAreaEl = document.getElementById('contentArea');
+    if (contentAreaEl) selBarResizeObserver.observe(contentAreaEl);
+  });
+  var contentAreaElNow = document.getElementById('contentArea');
+  if (contentAreaElNow) selBarResizeObserver.observe(contentAreaElNow);
 }
 
 function clearSelection() {
@@ -568,7 +641,7 @@ function openDuplicateModal() {
   modal.classList.add('open');
   modal.dataset.mode = 'duplicate';
   var title = modal.querySelector('h3');
-  if (title) title.textContent = '🔗 Дублювати фото до...';
+  if (title) title.textContent = '👥 Дублювати фото до...';
   fetch('/api/persons').then(function(r){ return r.json(); }).then(function(persons){
     allPersonsCache = {};
     persons.forEach(function(p){ allPersonsCache[p.id] = p; });
@@ -1187,21 +1260,21 @@ async function openPerson(p) {
 
   // Панель вибору фото
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
-  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.style.cssText = 'color:var(--text);font-size:13px;font-weight:600;flex:1';
-  var moveNewBtn = document.createElement('button'); moveNewBtn.className = 'btn btn-primary'; moveNewBtn.textContent = '➕ Нова людина';
+  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.className = 'sel-count';
+  var moveNewBtn = makeSelBtn('➕', 'Нова людина', 'btn btn-primary');
   moveNewBtn.onclick = function(){ moveSelectedToNew(); };
-  var moveExistBtn = document.createElement('button'); moveExistBtn.className = 'btn btn-secondary'; moveExistBtn.textContent = '👤 До існуючої';
+  var moveExistBtn = makeSelBtn('👤', 'До існуючої', 'btn btn-secondary');
   moveExistBtn.onclick = function(){ openMoveToExistingModal(); };
-  var removeSelBtn = document.createElement('button'); removeSelBtn.className = 'btn'; removeSelBtn.textContent = '✕ Прибрати з групи';
+  var removeSelBtn = makeSelBtn('✕', 'Прибрати з групи', 'btn');
   removeSelBtn.style.cssText = 'background:rgba(248,113,113,.15);border:1px solid var(--red);color:var(--red)';
   removeSelBtn.onclick = function(){ removeSelectedPhotos(); };
-  var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
+  var shareSelBtn = makeSelBtn('📋', 'Копіювати', 'btn btn-secondary');
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
-  var duplicateBtn = document.createElement('button'); duplicateBtn.className = 'btn btn-secondary'; duplicateBtn.textContent = '🔗 Дублювати в іншу людину';
+  var duplicateBtn = makeSelBtn('👥', 'Дублювати в іншу людину', 'btn btn-secondary');
   duplicateBtn.onclick = function(){ openDuplicateModal(); };
-  var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
+  var saveFolderBtn = makeSelBtn('💾', 'Зберегти в папку', 'btn btn-secondary');
   saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
-  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
+  var cancelSelBtn = makeSelBtn('↩️', 'Скасувати', 'btn btn-secondary');
   cancelSelBtn.onclick = function(){ clearSelection(); };
   selBar.appendChild(selCount); selBar.appendChild(moveNewBtn); selBar.appendChild(moveExistBtn); selBar.appendChild(removeSelBtn); selBar.appendChild(shareSelBtn); selBar.appendChild(duplicateBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
 
@@ -1926,6 +1999,14 @@ function lbToggleInfo() {
   if (!lbInfoOpen) { panel.classList.remove('open'); return; }
   panel.classList.add('open');
   renderLbInfo();
+}
+
+function makeSelBtn(icon, label, className) {
+  var btn = document.createElement('button');
+  btn.className = className;
+  btn.title = label;
+  btn.innerHTML = '<span class="btn-icon">' + icon + '</span><span class="btn-label"> ' + label + '</span>';
+  return btn;
 }
 
 function escapeHtmlDF(s) {
@@ -2869,12 +2950,12 @@ function openSharedPhotosView(personIds, names) {
   });
 
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
-  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.style.cssText = 'color:var(--text);font-size:13px;font-weight:600;flex:1';
-  var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
+  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.className = 'sel-count';
+  var shareSelBtn = makeSelBtn('📋', 'Копіювати', 'btn btn-secondary');
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
-  var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
+  var saveFolderBtn = makeSelBtn('💾', 'Зберегти в папку', 'btn btn-secondary');
   saveFolderBtn.onclick = function(){ saveSelectedToFolder(); };
-  var cancelSelBtn = document.createElement('button'); cancelSelBtn.className = 'btn btn-secondary'; cancelSelBtn.textContent = 'Скасувати';
+  var cancelSelBtn = makeSelBtn('↩️', 'Скасувати', 'btn btn-secondary');
   cancelSelBtn.onclick = function(){ clearSelection(); };
   selBar.appendChild(selCount); selBar.appendChild(shareSelBtn); selBar.appendChild(saveFolderBtn); selBar.appendChild(cancelSelBtn);
 

@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.venv/
+facelib.db
+facelib.db-wal
+facelib.db-shm
+static/thumbs/
