@@ -16,7 +16,7 @@ import uvicorn
 app = FastAPI(title="FaceLib")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-VERSION = "1.3"
+VERSION = "1.4"
 GITHUB_REPO = "Sandro-it/facelib"
 
 TAG_COLORS = ["#4a9e4a", "#d4713a", "#3a7ad4", "#c94a7a", "#a15fd4", "#d4b83a", "#4ad4c4", "#d44a4a"]
