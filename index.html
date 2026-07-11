@@ -747,7 +747,10 @@ async function renderTagFilterRow() {
   var allChip = document.createElement('span');
   allChip.className = 'tag-filter-chip' + (!currentTagFilter ? ' active' : '');
   allChip.textContent = 'Усі';
-  allChip.onclick = function() { currentTagFilter = null; renderTagFilterRow(); loadPersons(null); };
+  allChip.onclick = function() {
+    if (currentHighlightIds) { clearPhotoSearch(); }
+    currentTagFilter = null; renderTagFilterRow(); loadPersons(null);
+  };
 
   var chips = [allChip];
   tags.forEach(function(t) {
@@ -756,6 +759,10 @@ async function renderTagFilterRow() {
     chip.textContent = t.name;
     if (currentTagFilter === t.id) { chip.style.background = t.color; chip.style.borderColor = t.color; }
     chip.onclick = function() {
+      if (currentHighlightIds) {
+        clearPhotoSearch();
+        toast('Фільтр за тегом ховав би знайдені збіги - пошук скинуто', '');
+      }
       currentTagFilter = (currentTagFilter === t.id ? null : t.id);
       renderTagFilterRow(); loadPersons(null);
     };
