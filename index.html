@@ -460,19 +460,26 @@ function updateSelectionBarLayout() {
   var bar = document.getElementById('selectionBar');
   if (!bar || !bar.classList.contains('visible')) return;
   bar.classList.remove('compact');
-  // Даємо браузеру перемалювати без стиснення, щоб виміряти реальну потрібну ширину
+  // Подвійний rAF - гарантуємо що лейаут (щойно доданий клас visible) уже застосований браузером
   requestAnimationFrame(function() {
-    if (!bar.classList.contains('visible')) return;
-    var available = bar.clientWidth;
-    var needed = 0;
-    var children = bar.children;
-    for (var i = 0; i < children.length; i++) {
-      needed += children[i].getBoundingClientRect().width;
-    }
-    needed += 8 * Math.max(0, children.length - 1);
-    if (needed > available) {
-      bar.classList.add('compact');
-    }
+    requestAnimationFrame(function() {
+      if (!bar.classList.contains('visible')) return;
+      var barRect = bar.getBoundingClientRect();
+      if (barRect.width < 10) return; // лейаут ще не готовий - пропускаємо цей цикл, наступний виклик перевірить знову
+      var style = getComputedStyle(bar);
+      var padLeft = parseFloat(style.paddingLeft) || 0;
+      var padRight = parseFloat(style.paddingRight) || 0;
+      var available = barRect.width - padLeft - padRight;
+      var needed = 0;
+      var children = bar.children;
+      for (var i = 0; i < children.length; i++) {
+        needed += children[i].getBoundingClientRect().width;
+      }
+      needed += 8 * Math.max(0, children.length - 1);
+      if (needed > available) {
+        bar.classList.add('compact');
+      }
+    });
   });
 }
 
