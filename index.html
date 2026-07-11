@@ -2396,6 +2396,8 @@ async function searchByFile(file) {
   if (txt) txt.textContent = '⏳ Шукаємо...';
   if (res) { res.style.display = 'none'; res.innerHTML = ''; }
   currentHighlightIds = null;
+  // Пошук за фото - наскрізна функція, не повинна ховати збіги через активний фільтр тега
+  if (currentTagFilter) { currentTagFilter = null; renderTagFilterRow(); }
   var fd = new FormData(); fd.append('file', file);
   try {
     var r = await fetch('/api/search', {method:'POST', body:fd});
