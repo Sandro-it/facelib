@@ -463,20 +463,19 @@ function updateSelectionBarLayout() {
   var bar = document.getElementById('selectionBar');
   if (!bar || !bar.classList.contains('visible')) return;
 
-  function sumChildrenWidth() {
-    var needed = 0;
-    var children = bar.children;
-    for (var i = 0; i < children.length; i++) {
-      needed += children[i].getBoundingClientRect().width;
+  function countRows() {
+    var kids = bar.children;
+    if (!kids.length) return 1;
+    var firstTop = kids[0].getBoundingClientRect().top;
+    var rows = 1;
+    for (var i = 1; i < kids.length; i++) {
+      var top = kids[i].getBoundingClientRect().top;
+      if (Math.abs(top - firstTop) > 4) {
+        rows++;
+        firstTop = top;
+      }
     }
-    needed += 8 * Math.max(0, children.length - 1);
-    return needed;
-  }
-  function availableWidth() {
-    var style = getComputedStyle(bar);
-    var padLeft = parseFloat(style.paddingLeft) || 0;
-    var padRight = parseFloat(style.paddingRight) || 0;
-    return bar.getBoundingClientRect().width - padLeft - padRight;
+    return rows;
   }
   function showDebug(text) {
     var dbg = document.getElementById('selBarDebug');
@@ -489,40 +488,30 @@ function updateSelectionBarLayout() {
     dbg.textContent = text;
   }
 
-  // 1. Знімаємо стиснення і ПРИМУСОВО змушуємо браузер перемалювати синхронно
-  //    (читання offsetHeight форсує reflow тут і зараз - без очікування rAF/таймерів,
-  //    тому вимір нижче завжди відповідає щойно застосованому стану, без гонки)
+  // Даємо браузеру самому природно перенести кнопки (flex-wrap), а тоді рахуємо,
+  // скільки рядків реально вийшло за позиціями елементів - це надійніше за спробу
+  // передбачити це арифметично (сума ширин не завжди точно відповідає реальному wrap).
   bar.classList.remove('tight', 'icons-only');
   void bar.offsetHeight;
 
-  var available = availableWidth();
-  if (available < 10) {
-    showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' (ЛЕЙАУТ НЕ ГОТОВИЙ)');
+  var fullRows = countRows();
+  if (fullRows <= 1) {
+    showDebug('winW=' + window.innerWidth + ' fullRows=' + fullRows + ' -> ПОВНИЙ');
     return;
   }
 
-  // 2. Повний розмір влазить в один рядок - лишаємо як є
-  var fullNeeded = sumChildrenWidth();
-  if (fullNeeded <= available) {
-    showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' fullNeeded=' + Math.round(fullNeeded) + ' -> ПОВНИЙ');
-    return;
-  }
-
-  // 3. Пробуємо стиснутий розмір (менші відступи/шрифт, текст лишається)
   bar.classList.add('tight');
   void bar.offsetHeight;
-  var tightNeeded = sumChildrenWidth();
-  // Дозволяємо перенесення на 1-2 додаткові рядки в стиснутому вигляді з текстом -
-  // тільки якщо навіть цього не вистачить (знадобилось би 3+ рядки), переходимо на іконки
-  if (tightNeeded <= available * 2.2) {
-    showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' fullNeeded=' + Math.round(fullNeeded) + ' tightNeeded=' + Math.round(tightNeeded) + ' -> СТИСНУТИЙ');
+  var tightRows = countRows();
+  if (tightRows <= 2) {
+    showDebug('winW=' + window.innerWidth + ' fullRows=' + fullRows + ' tightRows=' + tightRows + ' -> СТИСНУТИЙ');
     return;
   }
 
   bar.classList.remove('tight');
   bar.classList.add('icons-only');
   void bar.offsetHeight;
-  showDebug('winW=' + window.innerWidth + ' available=' + Math.round(available) + ' fullNeeded=' + Math.round(fullNeeded) + ' tightNeeded=' + Math.round(tightNeeded) + ' -> ІКОНКИ');
+  showDebug('winW=' + window.innerWidth + ' fullRows=' + fullRows + ' tightRows=' + tightRows + ' -> ІКОНКИ');
 }
 
 window.addEventListener('resize', function() {
