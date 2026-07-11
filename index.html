@@ -479,16 +479,6 @@ function updateSelectionBarLayout() {
     }
     return rows;
   }
-  function showDebug(text) {
-    var dbg = document.getElementById('selBarDebug');
-    if (!dbg) {
-      dbg = document.createElement('div');
-      dbg.id = 'selBarDebug';
-      dbg.style.cssText = 'position:fixed;top:4px;left:4px;z-index:999;background:#000;color:#0f0;font-family:monospace;font-size:11px;padding:4px 8px;border-radius:4px;pointer-events:none;white-space:pre';
-      document.body.appendChild(dbg);
-    }
-    dbg.textContent = text;
-  }
 
   // Даємо браузеру самому природно перенести кнопки (flex-wrap), а тоді рахуємо,
   // скільки рядків реально вийшло за позиціями елементів - це надійніше за спробу
@@ -497,23 +487,16 @@ function updateSelectionBarLayout() {
   void bar.offsetHeight;
 
   var fullRows = countRows();
-  if (fullRows <= 1) {
-    showDebug('winW=' + window.innerWidth + ' fullRows=' + fullRows + ' -> ПОВНИЙ');
-    return;
-  }
+  if (fullRows <= 1) return;
 
   bar.classList.add('tight');
   void bar.offsetHeight;
   var tightRows = countRows();
-  if (tightRows <= 2) {
-    showDebug('winW=' + window.innerWidth + ' fullRows=' + fullRows + ' tightRows=' + tightRows + ' -> СТИСНУТИЙ');
-    return;
-  }
+  if (tightRows <= 2) return;
 
   bar.classList.remove('tight');
   bar.classList.add('icons-only');
   void bar.offsetHeight;
-  showDebug('winW=' + window.innerWidth + ' fullRows=' + fullRows + ' tightRows=' + tightRows + ' -> ІКОНКИ');
 }
 
 window.addEventListener('resize', function() {
