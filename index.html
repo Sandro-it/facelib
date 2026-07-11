@@ -125,6 +125,17 @@
   .photo-card.selected{outline:2px solid var(--accent);outline-offset:-2px}
   .photo-card.selected img{opacity:0.85}
   .selection-bar{display:none;position:fixed;bottom:0;left:270px;right:0;z-index:200;background:var(--surface2);border-top:2px solid var(--accent);padding:10px 20px;align-items:center;gap:10px;flex-wrap:wrap;row-gap:8px}
+  .selection-bar .sel-count{color:var(--text);font-size:13px;font-weight:600;flex:1;white-space:nowrap}
+  .selection-bar .btn{white-space:nowrap}
+  @media (max-width:900px){
+    .selection-bar{gap:6px;padding:8px 14px}
+    .selection-bar .btn{padding:6px 10px;font-size:12px}
+    .selection-bar .sel-count{font-size:12px}
+  }
+  @media (max-width:620px){
+    .selection-bar .btn{padding:5px 8px;font-size:11px}
+    .selection-bar .sel-count{flex:0 0 100%;margin-bottom:2px}
+  }
   .selection-bar.visible{display:flex}
   .overlay-btn{font-size:10px;color:#fff;background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);border-radius:5px;padding:3px 7px;cursor:pointer;font-family:var(--font);transition:background .15s}
   .overlay-btn:hover{background:rgba(255,255,255,.32)}
@@ -1187,7 +1198,7 @@ async function openPerson(p) {
 
   // Панель вибору фото
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
-  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.style.cssText = 'color:var(--text);font-size:13px;font-weight:600;flex:1';
+  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.className = 'sel-count';
   var moveNewBtn = document.createElement('button'); moveNewBtn.className = 'btn btn-primary'; moveNewBtn.textContent = '➕ Нова людина';
   moveNewBtn.onclick = function(){ moveSelectedToNew(); };
   var moveExistBtn = document.createElement('button'); moveExistBtn.className = 'btn btn-secondary'; moveExistBtn.textContent = '👤 До існуючої';
@@ -2869,7 +2880,7 @@ function openSharedPhotosView(personIds, names) {
   });
 
   var selBar = document.createElement('div'); selBar.className = 'selection-bar'; selBar.id = 'selectionBar';
-  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.style.cssText = 'color:var(--text);font-size:13px;font-weight:600;flex:1';
+  var selCount = document.createElement('span'); selCount.id = 'selCount'; selCount.className = 'sel-count';
   var shareSelBtn = document.createElement('button'); shareSelBtn.className = 'btn btn-secondary'; shareSelBtn.textContent = '📋 Копіювати';
   shareSelBtn.onclick = function(){ shareSelectedPhotos(); };
   var saveFolderBtn = document.createElement('button'); saveFolderBtn.className = 'btn btn-secondary'; saveFolderBtn.textContent = '💾 Зберегти в папку';
