@@ -516,8 +516,24 @@ function updateSelectionBarLayout() {
 
 window.addEventListener('resize', function() {
   clearTimeout(window._selBarResizeTimer);
-  window._selBarResizeTimer = setTimeout(updateSelectionBarLayout, 120);
+  window._selBarResizeTimer = setTimeout(updateSelectionBarLayout, 60);
 });
+
+// ResizeObserver надійніший за window.resize у деяких webview-рушіях (там подія resize
+// може спрацьовувати із запізненням або пропускатись) - стежимо напряму за контентною зоною,
+// яка й визначає доступну ширину панелі вибору
+if (window.ResizeObserver) {
+  var selBarResizeObserver = new ResizeObserver(function() {
+    clearTimeout(window._selBarResizeTimer);
+    window._selBarResizeTimer = setTimeout(updateSelectionBarLayout, 60);
+  });
+  document.addEventListener('DOMContentLoaded', function() {
+    var contentAreaEl = document.getElementById('contentArea');
+    if (contentAreaEl) selBarResizeObserver.observe(contentAreaEl);
+  });
+  var contentAreaElNow = document.getElementById('contentArea');
+  if (contentAreaElNow) selBarResizeObserver.observe(contentAreaElNow);
+}
 
 function clearSelection() {
   selectedPhotoIds.clear();
