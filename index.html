@@ -459,13 +459,17 @@ function updateSelectionBar() {
   updateSelectionBarLayout();
 }
 
+var selBarLayoutGen = 0;
+
 function updateSelectionBarLayout() {
   var bar = document.getElementById('selectionBar');
   if (!bar || !bar.classList.contains('visible')) return;
+  var myGen = ++selBarLayoutGen;
   bar.classList.remove('tight', 'icons-only');
   // Подвійний rAF - гарантуємо що лейаут (щойно доданий клас visible) уже застосований браузером
   requestAnimationFrame(function() {
     requestAnimationFrame(function() {
+      if (myGen !== selBarLayoutGen) return; // почався новіший вимір (наприклад через швидку зміну розміру вікна) - виходимо
       if (!bar.classList.contains('visible')) return;
 
       function measureAvailable() {
@@ -496,6 +500,7 @@ function updateSelectionBarLayout() {
       bar.classList.add('tight');
       requestAnimationFrame(function() {
         requestAnimationFrame(function() {
+          if (myGen !== selBarLayoutGen) return; // застарілий вимір - новіший вже почався
           if (!bar.classList.contains('visible')) return;
           var tightNeeded = measureNeeded();
           // Дозволяємо перенесення на 1-2 додаткові рядки в стиснутому вигляді з текстом -
