@@ -466,13 +466,15 @@ function updateSelectionBarLayout() {
   function countRows() {
     var kids = bar.children;
     if (!kids.length) return 1;
-    var firstTop = kids[0].getBoundingClientRect().top;
+    var firstRect = kids[0].getBoundingClientRect();
+    var firstCenter = firstRect.top + firstRect.height / 2;
     var rows = 1;
     for (var i = 1; i < kids.length; i++) {
-      var top = kids[i].getBoundingClientRect().top;
-      if (Math.abs(top - firstTop) > 4) {
+      var r = kids[i].getBoundingClientRect();
+      var center = r.top + r.height / 2;
+      if (Math.abs(center - firstCenter) > 8) {
         rows++;
-        firstTop = top;
+        firstCenter = center;
       }
     }
     return rows;
